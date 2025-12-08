@@ -78,3 +78,11 @@ export interface UserSession {
   isMaster: boolean;
   isAuthenticated: boolean;
 }
+
+export interface SystemBackup {
+  entries: TimeEntry[];
+  employees: EmployeeConfig[];
+  clients: ClientConfig[];
+  timestamp: string;
+  version: string;
+}

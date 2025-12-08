@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { parseCSV, calculateSummary } from './services/dataProcessor';
-import { TimeEntry, EmployeeConfig, ClientConfig, UserSession } from './types';
+import { TimeEntry, EmployeeConfig, ClientConfig, UserSession, SystemBackup } from './types';
 import FileUpload from './components/FileUpload';
 import Dashboard from './components/Dashboard';
 import Settings from './components/Settings';
 import Login from './components/Login';
-import { LayoutDashboard, Settings as SettingsIcon, LogOut } from 'lucide-react';
+import { LayoutDashboard, Settings as SettingsIcon, LogOut, Download, Database } from 'lucide-react';
 
 const STORAGE_KEY_EMPS = 'ekyte_analyzer_employees_v2';
 const STORAGE_KEY_CLIENTS = 'ekyte_analyzer_clients_v2';
@@ -25,6 +25,7 @@ const App: React.FC = () => {
   // Date Filtering
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
   // Load Persistence
   useEffect(() => {
@@ -55,31 +56,30 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // -- CSV Import Logic (Merge) --
   const handleDataLoaded = (csvContent: string) => {
     const newEntries = parseCSV(csvContent);
-    if (newEntries.length === 0) return;
+    if (newEntries.length === 0) {
+        setStatusMsg("Nenhum dado encontrado no CSV.");
+        setTimeout(() => setStatusMsg(null), 3000);
+        return;
+    }
 
     // INTELLIGENT MERGE LOGIC
-    // 1. Identify the time range of the NEW file
     const newDates = newEntries.map(e => e.date.getTime());
     const minNewDate = Math.min(...newDates);
     const maxNewDate = Math.max(...newDates);
 
-    // 2. Filter existing entries: Remove any entry that falls within the new file's range
-    // This allows "overwriting" a month by re-uploading it, while keeping other months intact.
     const nonOverlappingEntries = entries.filter(e => {
         const t = e.date.getTime();
         return t < minNewDate || t > maxNewDate;
     });
 
-    // 3. Combine
     const mergedEntries = [...nonOverlappingEntries, ...newEntries];
     
-    // 4. Update State and Persistence
     setEntries(mergedEntries);
     localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(mergedEntries));
 
-    // Update Date Filter to focus on the new data uploaded (User likely wants to see what they just uploaded)
     setStartDate(new Date(minNewDate).toISOString().split('T')[0]);
     setEndDate(new Date(maxNewDate).toISOString().split('T')[0]);
 
@@ -90,7 +90,6 @@ const App: React.FC = () => {
     setEmployees(prev => {
       const existingMap = new Map(prev.map(e => [e.name, e]));
       const newEmps: EmployeeConfig[] = [];
-      
       uniqueExecutors.forEach(name => {
          if (!existingMap.has(name)) {
              newEmps.push({
@@ -110,7 +109,6 @@ const App: React.FC = () => {
     setClients(prev => {
       const existingMap = new Map(prev.map(c => [c.name, c]));
       const newClients: ClientConfig[] = [];
-
       uniqueWorkspaces.forEach(name => {
          if (!existingMap.has(name)) {
             newClients.push({
@@ -126,6 +124,52 @@ const App: React.FC = () => {
       localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(updated));
       return updated;
     });
+    
+    setStatusMsg("CSV Importado com sucesso!");
+    setTimeout(() => setStatusMsg(null), 3000);
+  };
+
+  // -- Backup Import Logic (Replace All) --
+  const handleBackupLoaded = (backup: SystemBackup) => {
+      if (window.confirm("Atenção: Importar um backup substituirá TODOS os dados atuais. Deseja continuar?")) {
+          setEntries(backup.entries);
+          setEmployees(backup.employees);
+          setClients(backup.clients);
+          
+          localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(backup.entries));
+          localStorage.setItem(STORAGE_KEY_EMPS, JSON.stringify(backup.employees));
+          localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(backup.clients));
+
+          if (backup.entries.length > 0) {
+            const dates = backup.entries.map((e: TimeEntry) => e.date.getTime());
+            setStartDate(new Date(Math.min(...dates)).toISOString().split('T')[0]);
+            setEndDate(new Date(Math.max(...dates)).toISOString().split('T')[0]);
+          }
+
+          setStatusMsg("Base de dados restaurada com sucesso!");
+          setTimeout(() => setStatusMsg(null), 3000);
+      }
+  };
+
+  // -- Backup Export Logic --
+  const handleExportBackup = () => {
+      const backup: SystemBackup = {
+          entries,
+          employees,
+          clients,
+          timestamp: new Date().toISOString(),
+          version: '1.0'
+      };
+      
+      const dataStr = JSON.stringify(backup);
+      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+      
+      const exportFileDefaultName = `v4_productivity_backup_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.json`;
+      
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
   };
 
   const handleUpdateEmployees = (newEmps: EmployeeConfig[]) => {
@@ -195,12 +239,24 @@ const App: React.FC = () => {
                              <input type="date" className={DATE_INPUT_STYLE} value={startDate} onChange={e => setStartDate(e.target.value)} />
                              <span className="text-gray-400 text-xs">até</span>
                              <input type="date" className={DATE_INPUT_STYLE} value={endDate} onChange={e => setEndDate(e.target.value)} />
-                             {session.isMaster && (
-                                 <div className="ml-2"><FileUpload onDataLoaded={handleDataLoaded} /></div>
-                             )}
+                             
+                             <div className="ml-2">
+                                <FileUpload onDataLoaded={handleDataLoaded} onBackupLoaded={handleBackupLoaded} />
+                             </div>
                         </div>
                     </>
                 )}
+                
+                {session.isMaster && entries.length > 0 && (
+                    <button 
+                        onClick={handleExportBackup}
+                        className="p-2 text-gray-500 hover:text-red-700 transition-colors"
+                        title="Exportar Backup da Base de Dados"
+                    >
+                        <Download size={20} />
+                    </button>
+                )}
+
                 <div className="border-l pl-4 ml-2 border-gray-200 flex items-center gap-3">
                     <span className="text-xs text-gray-500 hidden lg:block">{session.email}</span>
                     <button onClick={() => setSession(null)} className="text-gray-400 hover:text-red-600 transition-colors" title="Sair">
@@ -210,18 +266,36 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
+        {statusMsg && (
+            <div className="bg-green-600 text-white text-xs text-center py-1 absolute w-full top-14 left-0 animate-fade-in">
+                {statusMsg}
+            </div>
+        )}
       </header>
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {entries.length === 0 && clients.length === 0 ? (
           <div className="flex flex-col items-center justify-center min-h-[50vh] animate-fade-in-up">
-            <h2 className="text-2xl font-bold text-gray-900">Bem-vindo à Produtividade</h2>
-            <p className="mt-2 text-gray-500 mb-8">Nenhum dado encontrado. {session.isMaster ? 'Importe uma planilha para começar.' : 'Aguarde o administrador carregar os dados.'}</p>
-            {session.isMaster ? <FileUpload onDataLoaded={handleDataLoaded} /> : (
-                <div className="p-4 bg-yellow-50 text-yellow-800 rounded-md text-sm border border-yellow-200">
-                    Aguardando carga de dados pelo Master (vinicius.hanzava@v4company.com)
+            <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center max-w-lg">
+                <div className="bg-red-50 p-3 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                    <Database className="text-red-600 h-8 w-8" />
                 </div>
-            )}
+                <h2 className="text-2xl font-bold text-gray-900">Base de Dados Vazia</h2>
+                <p className="mt-2 text-gray-500 mb-8 text-sm leading-relaxed">
+                    O sistema roda localmente no seu navegador para maior segurança e velocidade.
+                    <br/><br/>
+                    <strong>Como acessar os dados?</strong><br/>
+                    Peça ao Administrador para lhe enviar o arquivo de <strong>Backup (.json)</strong> e importe abaixo.
+                </p>
+                <div className="flex justify-center">
+                    <FileUpload onDataLoaded={handleDataLoaded} onBackupLoaded={handleBackupLoaded} />
+                </div>
+                {!session.isMaster && (
+                    <div className="mt-6 p-3 bg-yellow-50 text-yellow-800 rounded-md text-xs border border-yellow-200">
+                        Contate: vinicius.hanzava@v4company.com
+                    </div>
+                )}
+            </div>
           </div>
         ) : (
           activeTab === 'dashboard' ? <Dashboard summary={summary} /> : <Settings employees={employees} clients={clients} onUpdateEmployees={handleUpdateEmployees} onUpdateClients={handleUpdateClients} />
