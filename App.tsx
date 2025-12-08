@@ -5,11 +5,9 @@ import FileUpload from './components/FileUpload';
 import Dashboard from './components/Dashboard';
 import Settings from './components/Settings';
 import Login from './components/Login';
-import { LayoutDashboard, Settings as SettingsIcon, LogOut, Download, Database } from 'lucide-react';
+import { LayoutDashboard, Settings as SettingsIcon, LogOut, RefreshCw, Cloud, CloudOff, Info } from 'lucide-react';
+import { supabase } from './lib/supabase';
 
-const STORAGE_KEY_EMPS = 'ekyte_analyzer_employees_v2';
-const STORAGE_KEY_CLIENTS = 'ekyte_analyzer_clients_v2';
-const STORAGE_KEY_ENTRIES = 'ekyte_analyzer_entries_v2';
 const DATE_INPUT_STYLE = "bg-gray-700 text-white border-gray-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm p-1 border";
 
 const App: React.FC = () => {
@@ -25,36 +23,95 @@ const App: React.FC = () => {
   // Date Filtering
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+  
+  // Sync State
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<string>('');
 
-  // Load Persistence
+  // Initial Load from Cloud
   useEffect(() => {
-    const savedEmps = localStorage.getItem(STORAGE_KEY_EMPS);
-    const savedClients = localStorage.getItem(STORAGE_KEY_CLIENTS);
-    const savedEntries = localStorage.getItem(STORAGE_KEY_ENTRIES);
-
-    if (savedEmps) setEmployees(JSON.parse(savedEmps));
-    if (savedClients) setClients(JSON.parse(savedClients));
-    if (savedEntries) {
-        const parsed = JSON.parse(savedEntries);
-        // Revive Date objects
-        const revived = parsed.map((e: any) => ({
-            ...e,
-            date: new Date(e.date)
-        }));
-        setEntries(revived);
-        
-        // Auto-set filter range to latest data if available
-        if (revived.length > 0) {
-             const dates = revived.map((e: TimeEntry) => e.date.getTime());
-             const min = new Date(Math.min(...dates));
-             const max = new Date(Math.max(...dates));
-             // Default view: Last 30 days of available data or full range
-             setStartDate(min.toISOString().split('T')[0]);
-             setEndDate(max.toISOString().split('T')[0]);
-        }
+    if (session?.isAuthenticated) {
+        fetchCloudData();
     }
-  }, []);
+  }, [session]);
+
+  const fetchCloudData = async () => {
+      setIsSyncing(true);
+      try {
+          const { data, error } = await supabase
+            .from('app_state')
+            .select('*')
+            .eq('id', 1)
+            .single();
+
+          if (error) throw error;
+
+          if (data) {
+              // Parse JSON columns
+              // Revive Dates for Entries
+              const loadedEntries = (data.entries || []).map((e: any) => ({
+                  ...e,
+                  date: new Date(e.date) // Revive string to Date
+              }));
+              
+              setEntries(loadedEntries);
+              setEmployees(data.employees || []);
+              setClients(data.clients || []);
+
+              // Set Date Filter based on data range if not set
+              if (loadedEntries.length > 0 && !startDate) {
+                  const dates = loadedEntries.map((e: TimeEntry) => e.date.getTime());
+                  setStartDate(new Date(Math.min(...dates)).toISOString().split('T')[0]);
+                  setEndDate(new Date(Math.max(...dates)).toISOString().split('T')[0]);
+              }
+              
+              if (data.updated_at) {
+                  const date = new Date(data.updated_at);
+                  setLastSync(date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+              }
+          }
+      } catch (err) {
+          console.error("Erro ao buscar dados da nuvem:", err);
+          setStatusMsg("Erro ao conectar com banco de dados.");
+      } finally {
+          setIsSyncing(false);
+      }
+  };
+
+  const saveToCloud = async (
+      newEntries: TimeEntry[], 
+      newEmps: EmployeeConfig[], 
+      newClients: ClientConfig[]
+  ) => {
+      // Only Master can save/overwrite cloud data
+      if (!session?.isMaster) return;
+
+      setIsSyncing(true);
+      try {
+          const { error } = await supabase
+            .from('app_state')
+            .update({
+                entries: newEntries,
+                employees: newEmps,
+                clients: newClients,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', 1);
+
+          if (error) throw error;
+          
+          setLastSync(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+          setStatusMsg("Dados sincronizados com a nuvem!");
+          setTimeout(() => setStatusMsg(null), 3000);
+
+      } catch (err) {
+          console.error("Erro ao salvar na nuvem:", err);
+          setStatusMsg("Erro ao salvar dados.");
+      } finally {
+          setIsSyncing(false);
+      }
+  };
 
   // -- CSV Import Logic (Merge) --
   const handleDataLoaded = (csvContent: string) => {
@@ -77,21 +134,14 @@ const App: React.FC = () => {
 
     const mergedEntries = [...nonOverlappingEntries, ...newEntries];
     
-    setEntries(mergedEntries);
-    localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(mergedEntries));
-
-    setStartDate(new Date(minNewDate).toISOString().split('T')[0]);
-    setEndDate(new Date(maxNewDate).toISOString().split('T')[0]);
-
-    // Auto-Discovery & Config Update
+    // Auto-Discovery logic
     const uniqueExecutors = Array.from(new Set(newEntries.map(e => e.executor)));
     const uniqueWorkspaces = Array.from(new Set(newEntries.map(e => e.workspace)));
 
-    setEmployees(prev => {
-      const existingMap = new Map(prev.map(e => [e.name, e]));
-      const newEmps: EmployeeConfig[] = [];
-      uniqueExecutors.forEach(name => {
-         if (!existingMap.has(name)) {
+    const existingEmpMap = new Map(employees.map(e => [e.name, e]));
+    const newEmps: EmployeeConfig[] = [];
+    uniqueExecutors.forEach(name => {
+         if (!existingEmpMap.has(name)) {
              newEmps.push({
                  name,
                  department: 'Outros',
@@ -100,18 +150,14 @@ const App: React.FC = () => {
                  history: {}
              });
          }
-      });
-      const updated = [...prev, ...newEmps];
-      localStorage.setItem(STORAGE_KEY_EMPS, JSON.stringify(updated));
-      return updated;
     });
+    const updatedEmps = [...employees, ...newEmps];
 
-    setClients(prev => {
-      const existingMap = new Map(prev.map(c => [c.name, c]));
-      const newClients: ClientConfig[] = [];
-      uniqueWorkspaces.forEach(name => {
-         if (!existingMap.has(name)) {
-            newClients.push({
+    const existingClientMap = new Map(clients.map(c => [c.name, c]));
+    const newClientsList: ClientConfig[] = [];
+    uniqueWorkspaces.forEach(name => {
+         if (!existingClientMap.has(name)) {
+            newClientsList.push({
                 name,
                 isActive: true,
                 category: 'Executar',
@@ -119,67 +165,46 @@ const App: React.FC = () => {
                 history: {}
             });
          }
-      });
-      const updated = [...prev, ...newClients];
-      localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(updated));
-      return updated;
     });
+    const updatedClients = [...clients, ...newClientsList];
+
+    // Update State
+    setEntries(mergedEntries);
+    setEmployees(updatedEmps);
+    setClients(updatedClients);
+
+    setStartDate(new Date(minNewDate).toISOString().split('T')[0]);
+    setEndDate(new Date(maxNewDate).toISOString().split('T')[0]);
     
-    setStatusMsg("CSV Importado com sucesso!");
-    setTimeout(() => setStatusMsg(null), 3000);
+    // Save to Cloud
+    saveToCloud(mergedEntries, updatedEmps, updatedClients);
   };
 
   // -- Backup Import Logic (Replace All) --
   const handleBackupLoaded = (backup: SystemBackup) => {
-      if (window.confirm("Atenção: Importar um backup substituirá TODOS os dados atuais. Deseja continuar?")) {
+      if (window.confirm("Atenção: Importar um backup substituirá TODOS os dados na nuvem. Deseja continuar?")) {
           setEntries(backup.entries);
           setEmployees(backup.employees);
           setClients(backup.clients);
           
-          localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(backup.entries));
-          localStorage.setItem(STORAGE_KEY_EMPS, JSON.stringify(backup.employees));
-          localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(backup.clients));
-
           if (backup.entries.length > 0) {
             const dates = backup.entries.map((e: TimeEntry) => e.date.getTime());
             setStartDate(new Date(Math.min(...dates)).toISOString().split('T')[0]);
             setEndDate(new Date(Math.max(...dates)).toISOString().split('T')[0]);
           }
 
-          setStatusMsg("Base de dados restaurada com sucesso!");
-          setTimeout(() => setStatusMsg(null), 3000);
+          saveToCloud(backup.entries, backup.employees, backup.clients);
       }
-  };
-
-  // -- Backup Export Logic --
-  const handleExportBackup = () => {
-      const backup: SystemBackup = {
-          entries,
-          employees,
-          clients,
-          timestamp: new Date().toISOString(),
-          version: '1.0'
-      };
-      
-      const dataStr = JSON.stringify(backup);
-      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-      
-      const exportFileDefaultName = `v4_productivity_backup_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.json`;
-      
-      const linkElement = document.createElement('a');
-      linkElement.setAttribute('href', dataUri);
-      linkElement.setAttribute('download', exportFileDefaultName);
-      linkElement.click();
   };
 
   const handleUpdateEmployees = (newEmps: EmployeeConfig[]) => {
     setEmployees(newEmps);
-    localStorage.setItem(STORAGE_KEY_EMPS, JSON.stringify(newEmps));
+    saveToCloud(entries, newEmps, clients);
   };
 
   const handleUpdateClients = (newClients: ClientConfig[]) => {
     setClients(newClients);
-    localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(newClients));
+    saveToCloud(entries, employees, newClients);
   };
 
   const filteredEntries = useMemo(() => {
@@ -211,6 +236,17 @@ const App: React.FC = () => {
             </div>
             
             <div className="flex items-center space-x-4">
+                {/* Cloud Status Indicator */}
+                <div className="flex items-center gap-1.5 text-xs text-gray-500 mr-2 bg-gray-50 px-2 py-1 rounded border border-gray-100" title="Status da Nuvem">
+                    {isSyncing ? (
+                        <RefreshCw className="h-3 w-3 animate-spin text-blue-500" />
+                    ) : (
+                        <Cloud className={`h-3 w-3 ${session.isMaster ? 'text-green-500' : 'text-blue-500'}`} />
+                    )}
+                    <span className="hidden lg:inline">{isSyncing ? 'Sincronizando...' : lastSync ? `Sinc: ${lastSync}` : 'Conectado'}</span>
+                    {!session.isMaster && <span className="ml-1 text-[10px] bg-blue-100 text-blue-700 px-1 rounded">Leitor</span>}
+                </div>
+
                 {(entries.length > 0 || clients.length > 0) && (
                     <>
                         <div className="flex space-x-1 bg-gray-100 p-1 rounded-md">
@@ -240,21 +276,13 @@ const App: React.FC = () => {
                              <span className="text-gray-400 text-xs">até</span>
                              <input type="date" className={DATE_INPUT_STYLE} value={endDate} onChange={e => setEndDate(e.target.value)} />
                              
-                             <div className="ml-2">
-                                <FileUpload onDataLoaded={handleDataLoaded} onBackupLoaded={handleBackupLoaded} />
-                             </div>
+                             {session.isMaster && (
+                                 <div className="ml-2">
+                                    <FileUpload onDataLoaded={handleDataLoaded} onBackupLoaded={handleBackupLoaded} />
+                                 </div>
+                             )}
                         </div>
                     </>
-                )}
-                
-                {session.isMaster && entries.length > 0 && (
-                    <button 
-                        onClick={handleExportBackup}
-                        className="p-2 text-gray-500 hover:text-red-700 transition-colors"
-                        title="Exportar Backup da Base de Dados"
-                    >
-                        <Download size={20} />
-                    </button>
                 )}
 
                 <div className="border-l pl-4 ml-2 border-gray-200 flex items-center gap-3">
@@ -267,7 +295,7 @@ const App: React.FC = () => {
           </div>
         </div>
         {statusMsg && (
-            <div className="bg-green-600 text-white text-xs text-center py-1 absolute w-full top-14 left-0 animate-fade-in">
+            <div className={`text-white text-xs text-center py-1 absolute w-full top-14 left-0 animate-fade-in z-20 ${statusMsg.includes('Erro') ? 'bg-red-600' : 'bg-green-600'}`}>
                 {statusMsg}
             </div>
         )}
@@ -277,23 +305,33 @@ const App: React.FC = () => {
         {entries.length === 0 && clients.length === 0 ? (
           <div className="flex flex-col items-center justify-center min-h-[50vh] animate-fade-in-up">
             <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center max-w-lg">
-                <div className="bg-red-50 p-3 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                    <Database className="text-red-600 h-8 w-8" />
+                <div className="bg-blue-50 p-3 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                    <Cloud className="text-blue-600 h-8 w-8" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900">Base de Dados Vazia</h2>
-                <p className="mt-2 text-gray-500 mb-8 text-sm leading-relaxed">
-                    O sistema roda localmente no seu navegador para maior segurança e velocidade.
-                    <br/><br/>
-                    <strong>Como acessar os dados?</strong><br/>
-                    Peça ao Administrador para lhe enviar o arquivo de <strong>Backup (.json)</strong> e importe abaixo.
-                </p>
-                <div className="flex justify-center">
-                    <FileUpload onDataLoaded={handleDataLoaded} onBackupLoaded={handleBackupLoaded} />
-                </div>
-                {!session.isMaster && (
-                    <div className="mt-6 p-3 bg-yellow-50 text-yellow-800 rounded-md text-xs border border-yellow-200">
-                        Contate: vinicius.hanzava@v4company.com
-                    </div>
+                <h2 className="text-2xl font-bold text-gray-900">Base de Dados na Nuvem</h2>
+                
+                {session.isMaster ? (
+                    <>
+                        <p className="mt-2 text-gray-500 mb-8 text-sm leading-relaxed">
+                            O banco de dados está vazio. Importe uma planilha ou um backup para iniciar e sincronizar com toda a equipe.
+                        </p>
+                        <div className="flex justify-center">
+                            <FileUpload onDataLoaded={handleDataLoaded} onBackupLoaded={handleBackupLoaded} />
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <p className="mt-2 text-gray-500 mb-6 text-sm leading-relaxed">
+                            Nenhum dado encontrado no servidor.<br/>
+                            Aguarde o administrador (Vinicius) carregar a base de dados.
+                        </p>
+                        <button 
+                            onClick={fetchCloudData} 
+                            className="inline-flex items-center gap-2 text-blue-600 bg-blue-50 px-4 py-2 rounded-md hover:bg-blue-100 transition-colors"
+                        >
+                            <RefreshCw size={16} /> Tentar recarregar
+                        </button>
+                    </>
                 )}
             </div>
           </div>
