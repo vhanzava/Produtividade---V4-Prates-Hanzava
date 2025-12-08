@@ -45,7 +45,18 @@ const App: React.FC = () => {
             .eq('id', 1)
             .single();
 
-          if (error) throw error;
+          if (error) {
+              // Código PGRST116 significa que a query não retornou linhas (tabela vazia ou id 1 não existe)
+              // Isso é normal no primeiro uso, então não tratamos como erro fatal.
+              if (error.code === 'PGRST116') {
+                  console.log("Banco de dados inicializado vazio.");
+                  setEntries([]);
+                  setEmployees([]);
+                  setClients([]);
+                  return;
+              }
+              throw error;
+          }
 
           if (data) {
               // Parse JSON columns
@@ -71,9 +82,10 @@ const App: React.FC = () => {
                   setLastSync(date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
               }
           }
-      } catch (err) {
+      } catch (err: any) {
           console.error("Erro ao buscar dados da nuvem:", err);
-          setStatusMsg("Erro ao conectar com banco de dados.");
+          // Exibe a mensagem real do erro para ajudar no debug
+          setStatusMsg(`Erro de conexão: ${err.message || "Verifique as configurações."}`);
       } finally {
           setIsSyncing(false);
       }
@@ -89,15 +101,16 @@ const App: React.FC = () => {
 
       setIsSyncing(true);
       try {
+          // Tenta fazer upsert (inserir ou atualizar)
           const { error } = await supabase
             .from('app_state')
-            .update({
+            .upsert({
+                id: 1,
                 entries: newEntries,
                 employees: newEmps,
                 clients: newClients,
                 updated_at: new Date().toISOString()
-            })
-            .eq('id', 1);
+            });
 
           if (error) throw error;
           
@@ -105,9 +118,9 @@ const App: React.FC = () => {
           setStatusMsg("Dados sincronizados com a nuvem!");
           setTimeout(() => setStatusMsg(null), 3000);
 
-      } catch (err) {
+      } catch (err: any) {
           console.error("Erro ao salvar na nuvem:", err);
-          setStatusMsg("Erro ao salvar dados.");
+          setStatusMsg(`Erro ao salvar: ${err.message}`);
       } finally {
           setIsSyncing(false);
       }

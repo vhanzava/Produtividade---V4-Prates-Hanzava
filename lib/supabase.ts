@@ -1,14 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Acesso seguro com optional chaining (?.) para evitar crash se import.meta.env for undefined
-const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('AVISO: Supabase URL ou Key não encontradas. Verifique as variáveis de ambiente (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY) no painel da Vercel ou arquivo .env.');
+  console.error('ERRO CRÍTICO: Variáveis de ambiente do Supabase não encontradas.');
+  console.error('Verifique se VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY estão configuradas corretamente no Vercel (Key = Nome, Value = Valor).');
 }
 
-// Cria o cliente se as chaves existirem, senão cria um placeholder seguro para não travar a aplicação no load
-export const supabase = (supabaseUrl && supabaseAnonKey)
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : createClient('https://placeholder.supabase.co', 'placeholder');
+// Cria o cliente. Se as variáveis estiverem vazias, criará um cliente inválido que falhará nas requisições,
+// mas o erro será capturado pelo App.tsx com a mensagem correta.
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co', 
+  supabaseAnonKey || 'placeholder'
+);
