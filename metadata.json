@@ -1,0 +1,5 @@
+{
+  "name": "Ekyte Profitability Analyzer",
+  "description": "A Business Intelligence tool to analyze agency profitability based on Ekyte timesheet CSV exports.",
+  "requestFramePermissions": []
+}
