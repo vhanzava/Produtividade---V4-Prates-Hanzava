@@ -106,63 +106,46 @@ export const calculateSummary = (
   const empMap = new Map(employees.map(e => [e.name, e]));
   const clientMap = new Map(clients.map(c => [c.name, c]));
 
-  // Determine active months in filter range for Revenue Calculation
-  // We use dates to allow pro-rata calculation
   const start = startDateStr ? new Date(startDateStr + 'T00:00:00') : new Date();
   const end = endDateStr ? new Date(endDateStr + 'T00:00:00') : new Date();
   const activeMonths = startDateStr && endDateStr ? getMonthsInRange(start, end) : [];
 
-  // Helper: Calculate Pro-Rata Factor (0 to 1) for a specific month based on filter overlap
-  // If filter is 15 days in a 30 day month, factor is 0.5
   const getProRataRatio = (monthKey: string): number => {
     if (!startDateStr || !endDateStr) return 1;
 
     const [y, m] = monthKey.split('-').map(Number);
-    // Month Start: Day 1
     const monthStart = new Date(y, m - 1, 1);
-    // Month End: Last Day of Month
     const monthEnd = new Date(y, m, 0); 
     monthEnd.setHours(23, 59, 59, 999);
 
-    // Filter Start/End with time adjustment for intersection logic
     const filterStart = new Date(start);
     const filterEnd = new Date(end);
-    filterEnd.setHours(23, 59, 59, 999); // Ensure inclusive of the last day selected
+    filterEnd.setHours(23, 59, 59, 999); 
 
-    // Intersection Range
     const effectiveStart = filterStart > monthStart ? filterStart : monthStart;
     const effectiveEnd = filterEnd < monthEnd ? filterEnd : monthEnd;
 
     if (effectiveStart > effectiveEnd) return 0;
 
-    // Total days in the reference month
     const totalDaysInMonth = monthEnd.getDate();
-
-    // Days in intersection (inclusive)
     const diffMs = effectiveEnd.getTime() - effectiveStart.getTime();
-    // Convert ms to days. Using floor and adding 1 accounts for partial days rounding up to inclusive day count
     const daysOverlap = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
     
-    // Safety clamp (ratio cannot exceed 1)
     const safeDays = Math.max(0, Math.min(daysOverlap, totalDaysInMonth));
 
     return safeDays / totalDaysInMonth;
   };
 
-  // 1. Calculate Costs (per Task based on Month)
+  // 1. Calculate Costs
   const clientStats = new Map<string, { hours: number; cost: number }>();
   const empStats = new Map<string, { hours: number; cost: number }>();
-  const empMonthlyStats = new Map<string, Set<string>>(); // EmpName -> Set<MonthKey>
-
+  
   let totalHoursRealizedGlobal = 0;
   let totalCostGlobal = 0;
 
   entries.forEach(entry => {
     const empConfig = empMap.get(entry.executor);
     
-    // Determine Hourly Rate for this specific month
-    // Note: Cost per Hour is CONSTANT regardless of filter duration.
-    // If I cost 10k/mo (160h), my rate is 62.5/h. This rate applies whether I work 1 hour or 160 hours.
     let hourlyRate = 0;
     if (empConfig) {
         const monthConfig = empConfig.history[entry.monthKey];
@@ -173,28 +156,21 @@ export const calculateSummary = (
 
     const taskCost = entry.realizedDecimal * hourlyRate;
 
-    // Client Aggregation
     const cStat = clientStats.get(entry.workspace) || { hours: 0, cost: 0 };
     cStat.hours += entry.realizedDecimal;
     cStat.cost += taskCost;
     clientStats.set(entry.workspace, cStat);
 
-    // Employee Aggregation
     const eStat = empStats.get(entry.executor) || { hours: 0, cost: 0 };
     eStat.hours += entry.realizedDecimal;
     eStat.cost += taskCost;
     empStats.set(entry.executor, eStat);
 
-    if (!empMonthlyStats.has(entry.executor)) {
-        empMonthlyStats.set(entry.executor, new Set());
-    }
-    empMonthlyStats.get(entry.executor)?.add(entry.monthKey);
-
     totalHoursRealizedGlobal += entry.realizedDecimal;
     totalCostGlobal += taskCost;
   });
 
-  // 2. Calculate Revenue (Sum of Fees PRO-RATED for active months)
+  // 2. Calculate Revenue (Fee Recorrente + OneTime Fee)
   const clientSummaries: ClientSummary[] = [];
   let totalRevenueGlobal = 0;
   const revenueByCategory: Record<ClientCategory, number> = { 'Saber': 0, 'Ter': 0, 'Executar': 0 };
@@ -206,6 +182,7 @@ export const calculateSummary = (
     const config = clientMap.get(name);
     
     let totalFee = 0;
+    let realizedOneTimeFee = 0;
     let category: ClientCategory = 'Executar';
     let isActive = true;
 
@@ -213,7 +190,30 @@ export const calculateSummary = (
         category = config.category;
         isActive = config.isActive;
         
-        // Sum fee for each selected month, adjusted by Pro-Rata factor
+        // One Time Fee Logic:
+        // Se houver um OneTimeFee configurado E o intervalo filtrado incluir a data de início do contrato
+        // Se não houver data de início configurada, assumimos que se aplica ao primeiro mês dos dados processados ou filtro
+        let shouldApplyOneTime = false;
+        if (config.oneTimeFee && config.oneTimeFee > 0) {
+            if (config.contractStartDate) {
+                const contractStart = new Date(config.contractStartDate);
+                // Verifica se a data de início do contrato está dentro do range filtrado
+                if (contractStart >= start && contractStart <= end) {
+                    shouldApplyOneTime = true;
+                }
+            } else {
+                // Fallback: Se não tem data de contrato, aplica se o filtro estiver no início dos tempos (ex: é a primeira vez que aparece)
+                // Para simplificar, vamos aplicar pro-rata se estivermos olhando para um período longo, mas o ideal é ter a data.
+                // Como regra simples: Se não tiver data de contrato, NÃO aplicamos automaticamente para evitar duplicação em filtros futuros.
+                // O usuário deve definir a data de início.
+            }
+        }
+
+        if (shouldApplyOneTime) {
+            realizedOneTimeFee = config.oneTimeFee || 0;
+            totalFee += realizedOneTimeFee;
+        }
+
         activeMonths.forEach(m => {
             const monthlyFee = config.history[m] !== undefined ? config.history[m] : config.defaultFee;
             const ratio = getProRataRatio(m);
@@ -229,7 +229,8 @@ export const calculateSummary = (
             name,
             totalHours: stat.hours,
             operationalCost: stat.cost,
-            monthlyFee: totalFee, // This is now Pro-Rated Revenue
+            monthlyFee: totalFee, 
+            oneTimeFee: realizedOneTimeFee,
             grossProfit,
             margin,
             isActive,
@@ -243,7 +244,7 @@ export const calculateSummary = (
     }
   });
 
-  // 3. Employee & Department Capacity (PRO-RATED)
+  // 3. Employee & Department Capacity
   const employeeSummaries: EmployeeSummary[] = [];
   const deptStats = new Map<string, { realized: number; capacity: number; count: number }>();
   const departments: DepartmentType[] = ['Criação', 'Atendimento', 'Gestão de Tráfego', 'Gestão', 'Outros'];
@@ -260,7 +261,6 @@ export const calculateSummary = (
 
       if (config) {
           dept = config.department;
-          // Calculate capacity: sum of capacity for each active month, PRO-RATED
           activeMonths.forEach(m => {
              const mConfig = config.history[m];
              const monthlyCap = mConfig ? mConfig.hours : config.defaultHours;
@@ -268,7 +268,6 @@ export const calculateSummary = (
              totalCapacity += monthlyCap * ratio;
           });
       } else {
-          // Default fallback (160h per month), pro-rated
           activeMonths.forEach(m => {
             const ratio = getProRataRatio(m);
             totalCapacity += 160 * ratio;

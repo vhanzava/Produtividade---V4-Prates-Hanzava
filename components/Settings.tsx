@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { EmployeeConfig, ClientConfig, DepartmentType, ClientCategory } from '../types';
-import { Save, User, Briefcase, Plus, Archive, RefreshCw, Calendar } from 'lucide-react';
+import { Save, User, Briefcase, Plus, Archive, RefreshCw, Calendar, FileText, Loader, Upload } from 'lucide-react';
+import { extractContractData } from '../services/contractParser';
 
 interface SettingsProps {
   employees: EmployeeConfig[];
@@ -12,7 +13,6 @@ interface SettingsProps {
 const DEPARTMENTS: DepartmentType[] = ['Criação', 'Atendimento', 'Gestão de Tráfego', 'Gestão', 'Outros'];
 const CATEGORIES: ClientCategory[] = ['Saber', 'Ter', 'Executar'];
 
-// Generate last 12 months for dropdown + Next 12 months
 const generateMonthOptions = () => {
     const options = [{ label: 'Padrão (Geral)', value: 'default' }];
     const today = new Date();
@@ -30,16 +30,21 @@ const INPUT_STYLE = "bg-gray-700 text-white border-gray-600 rounded-md shadow-sm
 
 const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmployees, onUpdateClients }) => {
   const [activeTab, setActiveTab] = useState<'employees' | 'clients'>('employees');
-  const [selectedMonth, setSelectedMonth] = useState<string>('default'); // 'default' or 'YYYY-MM'
+  const [selectedMonth, setSelectedMonth] = useState<string>('default');
   
   const [localEmps, setLocalEmps] = useState(employees);
   const [localClients, setLocalClients] = useState(clients);
   const [isSaved, setIsSaved] = useState(false);
+  
+  // Loading state for PDF parsing
+  const [processingClientIndex, setProcessingClientIndex] = useState<number | null>(null);
 
-  // New Client Input State
   const [newClientName, setNewClientName] = useState('');
   const [newClientFee, setNewClientFee] = useState('');
   const [newClientCategory, setNewClientCategory] = useState<ClientCategory>('Executar');
+  
+  // Ref for hidden file input used for contract uploads
+  const fileInputRefs = useRef<{[key: number]: HTMLInputElement | null}>({});
 
   const handleEmpChange = (index: number, field: string, value: string) => {
     const newEmps = [...localEmps];
@@ -55,10 +60,8 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
             if (field === 'monthlyCost') emp.defaultCost = numValue;
             if (field === 'monthlyHours') emp.defaultHours = numValue;
         } else {
-            // Update History
             if (!emp.history) emp.history = {};
             if (!emp.history[selectedMonth]) {
-                // Init with default if not exists
                 emp.history[selectedMonth] = { cost: emp.defaultCost, hours: emp.defaultHours };
             }
             if (field === 'monthlyCost') emp.history[selectedMonth].cost = numValue;
@@ -81,6 +84,8 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
             if (!client.history) client.history = {};
             client.history[selectedMonth] = numValue;
         }
+    } else if (field === 'oneTimeFee') {
+         client.oneTimeFee = parseFloat(value) || 0;
     } else {
         // @ts-ignore
         client[field] = value;
@@ -112,7 +117,53 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
     setTimeout(() => setIsSaved(false), 3000);
   };
 
-  // Helper to get display value based on selected month
+  const handleContractUpload = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      setProcessingClientIndex(index);
+      try {
+          const data = await extractContractData(file);
+          
+          const newClients = [...localClients];
+          const client = newClients[index];
+
+          if (data.recurringFee > 0) {
+              if (selectedMonth === 'default') {
+                  client.defaultFee = data.recurringFee;
+              } else {
+                  if (!client.history) client.history = {};
+                  client.history[selectedMonth] = data.recurringFee;
+              }
+          }
+
+          if (data.oneTimeFee > 0) {
+              client.oneTimeFee = data.oneTimeFee;
+          }
+
+          if (data.startDate) {
+              client.contractStartDate = data.startDate;
+          }
+          
+          // Se o nome no PDF for muito diferente, talvez alertar? Por enquanto, mantemos o nome do app ou atualizamos se estiver vazio
+          if (!client.name && data.clientName) {
+              client.name = data.clientName;
+          }
+
+          setLocalClients(newClients);
+          setIsSaved(false);
+          alert(`Contrato Processado!\nFee Recorrente: R$ ${data.recurringFee}\nSetup (One-Time): R$ ${data.oneTimeFee}\nInício: ${data.startDate || 'Não detectado'}`);
+
+      } catch (err) {
+          console.error(err);
+          alert("Erro ao ler o PDF. Verifique se é um PDF de contrato válido.");
+      } finally {
+          setProcessingClientIndex(null);
+          // Clear input
+          if (e.target) e.target.value = '';
+      }
+  };
+
   const getEmpValue = (emp: EmployeeConfig, type: 'cost' | 'hours') => {
       if (selectedMonth === 'default') {
           return type === 'cost' ? emp.defaultCost : emp.defaultHours;
@@ -133,7 +184,6 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-      {/* Settings Header */}
       <div className="border-b border-gray-200 flex flex-col md:flex-row justify-between items-center bg-gray-50 px-6 py-4 gap-4">
         <div className="flex space-x-4">
           <button
@@ -156,7 +206,6 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
           </button>
         </div>
 
-        {/* Month Selector */}
         <div className="flex items-center space-x-2 bg-white px-3 py-1.5 rounded-md border border-gray-300">
             <Calendar size={16} className="text-gray-500" />
             <span className="text-xs font-medium text-gray-500">Mês de Competência:</span>
@@ -185,7 +234,6 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 mb-6">
                 <p className="text-sm text-yellow-700">
                     <strong>Atenção:</strong> Você está editando valores específicos para <strong>{monthOptions.find(o => o.value === selectedMonth)?.label}</strong>. 
-                    Isso criará uma exceção no histórico. Para alterar o valor base de todos os meses, selecione "Padrão (Geral)".
                 </p>
             </div>
         )}
@@ -241,7 +289,6 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
           </div>
         ) : (
           <div className="space-y-6">
-             {/* Add Client Form */}
              <div className="bg-gray-50 p-4 rounded-md border border-gray-200 flex flex-wrap items-end gap-4">
                 <div className="flex-1 min-w-[200px]">
                     <label className="block text-xs font-medium text-gray-500 mb-1">Nome do Cliente/Projeto</label>
@@ -286,11 +333,15 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                 <table className="min-w-full divide-y divide-gray-200">
                 <thead>
                     <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">Contrato</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Fee {selectedMonth !== 'default' && '(Exceção)'}
+                        Fee Recorrente {selectedMonth !== 'default' && '(Mês)'}
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Setup (One-Time)
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                     </tr>
@@ -300,6 +351,27 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                         const realIndex = localClients.findIndex(c => c.name === client.name);
                         return (
                         <tr key={realIndex} className={client.isActive ? '' : 'bg-gray-50 opacity-75'}>
+                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <button
+                                    onClick={() => fileInputRefs.current[realIndex]?.click()}
+                                    className="text-red-600 hover:text-red-800 transition-colors p-1 rounded hover:bg-red-50"
+                                    title="Carregar PDF do Contrato"
+                                    disabled={processingClientIndex === realIndex}
+                                >
+                                    {processingClientIndex === realIndex ? (
+                                        <Loader size={18} className="animate-spin" />
+                                    ) : (
+                                        <FileText size={18} />
+                                    )}
+                                </button>
+                                <input 
+                                    type="file" 
+                                    className="hidden" 
+                                    accept="application/pdf"
+                                    ref={el => fileInputRefs.current[realIndex] = el}
+                                    onChange={(e) => handleContractUpload(e, realIndex)}
+                                />
+                            </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${client.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                                     {client.isActive ? 'Ativo' : 'Inativo'}
@@ -316,12 +388,21 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                 </select>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <input
-                                type="number"
-                                className={INPUT_STYLE}
-                                value={getClientFee(client)}
-                                onChange={(e) => handleClientChange(realIndex, 'monthlyFee', e.target.value)}
-                            />
+                                <input
+                                    type="number"
+                                    className={INPUT_STYLE}
+                                    value={getClientFee(client)}
+                                    onChange={(e) => handleClientChange(realIndex, 'monthlyFee', e.target.value)}
+                                />
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <input
+                                    type="number"
+                                    className={INPUT_STYLE}
+                                    value={client.oneTimeFee || 0}
+                                    onChange={(e) => handleClientChange(realIndex, 'oneTimeFee', e.target.value)}
+                                    placeholder="0.00"
+                                />
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <button

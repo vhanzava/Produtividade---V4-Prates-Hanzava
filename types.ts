@@ -1,3 +1,4 @@
+
 export interface TimeEntry {
   id: string;
   executor: string;
@@ -31,6 +32,8 @@ export interface ClientConfig {
   isActive: boolean;
   category: ClientCategory;
   defaultFee: number;
+  oneTimeFee?: number; // Valor de Implementação/Setup
+  contractStartDate?: string; // YYYY-MM-DD
   history: Record<string, number>; // key: "YYYY-MM", value: fee
 }
 
@@ -39,6 +42,7 @@ export interface ClientSummary {
   totalHours: number;
   operationalCost: number;
   monthlyFee: number; // Sum of fees for the selected period
+  oneTimeFee: number; // Included in revenue logic
   grossProfit: number;
   margin: number;
   isActive: boolean;
