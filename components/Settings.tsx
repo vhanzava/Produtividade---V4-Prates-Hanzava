@@ -145,7 +145,6 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
               client.contractStartDate = data.startDate;
           }
           
-          // Se o nome no PDF for muito diferente, talvez alertar? Por enquanto, mantemos o nome do app ou atualizamos se estiver vazio
           if (!client.name && data.clientName) {
               client.name = data.clientName;
           }
@@ -154,9 +153,10 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
           setIsSaved(false);
           alert(`Contrato Processado!\nFee Recorrente: R$ ${data.recurringFee}\nSetup (One-Time): R$ ${data.oneTimeFee}\nInício: ${data.startDate || 'Não detectado'}`);
 
-      } catch (err) {
-          console.error(err);
-          alert("Erro ao ler o PDF. Verifique se é um PDF de contrato válido.");
+      } catch (err: any) {
+          console.error("PDF Error:", err);
+          // Mensagem de erro mais detalhada para facilitar debug
+          alert(`Erro ao ler o PDF: ${err.message || err}`);
       } finally {
           setProcessingClientIndex(null);
           // Clear input

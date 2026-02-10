@@ -1,8 +1,25 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configura o worker via CDN para evitar problemas de bundler
+// --- PDF.js v4+ Polyfill Setup ---
+// A versão 4 do PDF.js exige Promise.withResolvers, que é muito recente.
+// Adicionamos este polyfill para evitar falhas em navegadores/ambientes que ainda não suportam nativamente.
 // @ts-ignore
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.mjs';
+if (typeof Promise.withResolvers === 'undefined') {
+  // @ts-ignore
+  Promise.withResolvers = function () {
+    let resolve, reject;
+    const promise = new Promise((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+}
+
+// Configura o worker via CDN
+// Usamos a versão minificada (.min.mjs) para garantir compatibilidade e performance
+// @ts-ignore
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
 
 export interface ContractData {
   clientName: string | null;
@@ -26,11 +43,15 @@ const parseBrazilianDate = (dateStr: string): string | null => {
     };
     
     try {
-        const parts = dateStr.toLowerCase().split(' de ');
+        // Limpeza básica para remover caracteres extras que o OCR possa ter pego
+        const cleanDateStr = dateStr.replace(/;/g, '').replace(/\./g, '').trim();
+        const parts = cleanDateStr.toLowerCase().split(' de ');
+        
         if (parts.length === 3) {
             const day = parts[0].trim().padStart(2, '0');
             const month = months[parts[1].trim()];
-            const year = parts[2].trim().replace(';', '').replace('.', '');
+            const year = parts[2].trim();
+            
             if (day && month && year) {
                 return `${year}-${month}-${day}`;
             }
@@ -41,6 +62,8 @@ const parseBrazilianDate = (dateStr: string): string | null => {
 
 export const extractContractData = async (file: File): Promise<ContractData> => {
   const arrayBuffer = await file.arrayBuffer();
+  
+  // Carrega o documento usando o worker configurado
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   
   let fullText = '';
@@ -56,9 +79,9 @@ export const extractContractData = async (file: File): Promise<ContractData> => 
     fullText += pageText + '\n';
   }
 
-  // Regex Patterns baseados no modelo V4
+  // Regex Patterns refinados
   const patterns = {
-    // Busca nome após "Contratante" e antes de ", pessoa jurídica" ou CNPJ
+    // Busca nome após "Contratante"
     clientName: /Contratante\s*([\s\S]*?)(?=\s*,?\s*pessoa jurídica|\s*,?\s*inscrita no CNPJ)/i,
     
     // "Valor da Parcela: R$ 6.602,01"
@@ -67,7 +90,7 @@ export const extractContractData = async (file: File): Promise<ContractData> => 
     // "Valor de implementação (pontual): R$ 27.735,00"
     oneTimeFee: /Valor de implementação \(pontual\):\s*R\$\s*([\d\.,]+)/i,
 
-    // "Data de início do projeto: 21 de fevereiro de 2026"
+    // "Data de início do projeto: 21 de fevereiro de 2026" - Captura até ; ou fim de linha
     startDate: /Data de início do projeto:\s*(.*?)(;|$)/i
   };
 
