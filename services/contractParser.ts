@@ -1,8 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
 // --- PDF.js v4+ Polyfill Setup ---
-// A versão 4 do PDF.js exige Promise.withResolvers, que é muito recente.
-// Adicionamos este polyfill para evitar falhas em navegadores/ambientes que ainda não suportam nativamente.
+// A versão 4 do PDF.js exige Promise.withResolvers.
 // @ts-ignore
 if (typeof Promise.withResolvers === 'undefined') {
   // @ts-ignore
@@ -16,10 +15,11 @@ if (typeof Promise.withResolvers === 'undefined') {
   };
 }
 
-// Configura o worker via CDN
-// Usamos a versão minificada (.min.mjs) para garantir compatibilidade e performance
+// Configura o worker via CDN dinamicamente
+// Usa a propriedade .version da própria biblioteca para garantir que o Worker 
+// seja exatamente da mesma versão do pacote instalado via npm (Ex: 4.10.38)
 // @ts-ignore
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 export interface ContractData {
   clientName: string | null;
