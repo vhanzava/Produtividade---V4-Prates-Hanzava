@@ -1,15 +1,39 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Função auxiliar robusta para acessar variáveis de ambiente
+const getEnv = (key: string): string | undefined => {
+  // 1. Tenta via import.meta.env (Padrão Vite)
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+      // @ts-ignore
+      return import.meta.env[key];
+    }
+  } catch (e) { /* ignore */ }
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('ERRO CRÍTICO: Variáveis de ambiente do Supabase não encontradas.');
-  console.error('Verifique se VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY estão configuradas corretamente no Vercel (Key = Nome, Value = Valor).');
+  // 2. Tenta via process.env (Fallback para ambientes Node/Webpack/Compat)
+  try {
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env && process.env[key]) {
+      // @ts-ignore
+      return process.env[key];
+    }
+  } catch (e) { /* ignore */ }
+
+  return undefined;
+};
+
+const supabaseUrl = getEnv('VITE_SUPABASE_URL');
+const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
+
+// Se não houver chaves (ambiente de teste), apenas loga modo offline e usa placeholder
+const isTestEnv = !supabaseUrl || !supabaseAnonKey;
+
+if (isTestEnv) {
+  console.log('Environment: Modo de Teste/Offline detectado (Sem conexão Supabase).');
 }
 
-// Cria o cliente. Se as variáveis estiverem vazias, criará um cliente inválido que falhará nas requisições,
-// mas o erro será capturado pelo App.tsx com a mensagem correta.
+// Inicializa cliente. 
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co', 
   supabaseAnonKey || 'placeholder'

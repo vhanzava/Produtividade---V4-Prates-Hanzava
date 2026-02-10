@@ -29,12 +29,20 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string>('');
 
+  // Detect Offline/Test Mode based on Supabase URL
+  // @ts-ignore
+  const isOfflineMode = !supabase.supabaseUrl || supabase.supabaseUrl.includes('placeholder');
+
   // Initial Load from Cloud
   useEffect(() => {
     if (session?.isAuthenticated) {
+        if (isOfflineMode) {
+            console.log("App em Modo Offline: Pulando busca inicial de dados.");
+            return;
+        }
         fetchCloudData();
     }
-  }, [session]);
+  }, [session]); // isOfflineMode é constante, não precisa estar na dependência
 
   const fetchCloudData = async () => {
       setIsSyncing(true);
@@ -46,8 +54,6 @@ const App: React.FC = () => {
             .single();
 
           if (error) {
-              // Código PGRST116 significa que a query não retornou linhas (tabela vazia ou id 1 não existe)
-              // Isso é normal no primeiro uso, então não tratamos como erro fatal.
               if (error.code === 'PGRST116') {
                   console.log("Banco de dados inicializado vazio.");
                   setEntries([]);
@@ -59,18 +65,15 @@ const App: React.FC = () => {
           }
 
           if (data) {
-              // Parse JSON columns
-              // Revive Dates for Entries
               const loadedEntries = (data.entries || []).map((e: any) => ({
                   ...e,
-                  date: new Date(e.date) // Revive string to Date
+                  date: new Date(e.date)
               }));
               
               setEntries(loadedEntries);
               setEmployees(data.employees || []);
               setClients(data.clients || []);
 
-              // Set Date Filter based on data range if not set
               if (loadedEntries.length > 0 && !startDate) {
                   const dates = loadedEntries.map((e: TimeEntry) => e.date.getTime());
                   setStartDate(new Date(Math.min(...dates)).toISOString().split('T')[0]);
@@ -83,9 +86,9 @@ const App: React.FC = () => {
               }
           }
       } catch (err: any) {
-          console.error("Erro ao buscar dados da nuvem:", err);
-          // Exibe a mensagem real do erro para ajudar no debug
-          setStatusMsg(`Erro de conexão: ${err.message || "Verifique as configurações."}`);
+          console.error("Erro ao buscar dados:", err);
+          // Em offline real, não mostramos erro crítico, apenas fallback
+          setStatusMsg("Erro na conexão com a nuvem.");
       } finally {
           setIsSyncing(false);
       }
@@ -96,12 +99,18 @@ const App: React.FC = () => {
       newEmps: EmployeeConfig[], 
       newClients: ClientConfig[]
   ) => {
-      // Only Master can save/overwrite cloud data
       if (!session?.isMaster) return;
+
+      // Em modo offline/teste, simulamos o salvamento
+      if (isOfflineMode) {
+          setLastSync(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+          setStatusMsg("Ambiente de Teste: Dados atualizados localmente.");
+          setTimeout(() => setStatusMsg(null), 3000);
+          return;
+      }
 
       setIsSyncing(true);
       try {
-          // Tenta fazer upsert (inserir ou atualizar)
           const { error } = await supabase
             .from('app_state')
             .upsert({
@@ -119,8 +128,8 @@ const App: React.FC = () => {
           setTimeout(() => setStatusMsg(null), 3000);
 
       } catch (err: any) {
-          console.error("Erro ao salvar na nuvem:", err);
-          setStatusMsg(`Erro ao salvar: ${err.message}`);
+          console.error("Erro ao salvar:", err);
+          setStatusMsg(`Erro ao salvar: ${err.message || 'Falha de conexão'}`);
       } finally {
           setIsSyncing(false);
       }
@@ -135,7 +144,6 @@ const App: React.FC = () => {
         return;
     }
 
-    // INTELLIGENT MERGE LOGIC
     const newDates = newEntries.map(e => e.date.getTime());
     const minNewDate = Math.min(...newDates);
     const maxNewDate = Math.max(...newDates);
@@ -147,7 +155,6 @@ const App: React.FC = () => {
 
     const mergedEntries = [...nonOverlappingEntries, ...newEntries];
     
-    // Auto-Discovery logic
     const uniqueExecutors = Array.from(new Set(newEntries.map(e => e.executor)));
     const uniqueWorkspaces = Array.from(new Set(newEntries.map(e => e.workspace)));
 
@@ -181,7 +188,6 @@ const App: React.FC = () => {
     });
     const updatedClients = [...clients, ...newClientsList];
 
-    // Update State
     setEntries(mergedEntries);
     setEmployees(updatedEmps);
     setClients(updatedClients);
@@ -189,13 +195,16 @@ const App: React.FC = () => {
     setStartDate(new Date(minNewDate).toISOString().split('T')[0]);
     setEndDate(new Date(maxNewDate).toISOString().split('T')[0]);
     
-    // Save to Cloud
     saveToCloud(mergedEntries, updatedEmps, updatedClients);
   };
 
   // -- Backup Import Logic (Replace All) --
   const handleBackupLoaded = (backup: SystemBackup) => {
-      if (window.confirm("Atenção: Importar um backup substituirá TODOS os dados na nuvem. Deseja continuar?")) {
+      const msg = isOfflineMode 
+        ? "Importar backup? (Modo Offline: dados não serão salvos na nuvem)" 
+        : "Atenção: Importar um backup substituirá TODOS os dados na nuvem. Deseja continuar?";
+
+      if (window.confirm(msg)) {
           setEntries(backup.entries);
           setEmployees(backup.employees);
           setClients(backup.clients);
@@ -249,14 +258,25 @@ const App: React.FC = () => {
             </div>
             
             <div className="flex items-center space-x-4">
-                {/* Cloud Status Indicator */}
-                <div className="flex items-center gap-1.5 text-xs text-gray-500 mr-2 bg-gray-50 px-2 py-1 rounded border border-gray-100" title="Status da Nuvem">
+                {/* Status Indicator */}
+                <div 
+                    className={`flex items-center gap-1.5 text-xs mr-2 px-2 py-1 rounded border ${
+                        isOfflineMode 
+                        ? 'bg-orange-50 text-orange-700 border-orange-100' 
+                        : 'bg-gray-50 text-gray-500 border-gray-100'
+                    }`} 
+                    title={isOfflineMode ? "Modo Offline (Sem conexão com banco)" : "Conectado à Nuvem"}
+                >
                     {isSyncing ? (
                         <RefreshCw className="h-3 w-3 animate-spin text-blue-500" />
+                    ) : isOfflineMode ? (
+                        <CloudOff className="h-3 w-3 text-orange-500" />
                     ) : (
                         <Cloud className={`h-3 w-3 ${session.isMaster ? 'text-green-500' : 'text-blue-500'}`} />
                     )}
-                    <span className="hidden lg:inline">{isSyncing ? 'Sincronizando...' : lastSync ? `Sinc: ${lastSync}` : 'Conectado'}</span>
+                    <span className="hidden lg:inline">
+                        {isSyncing ? 'Sincronizando...' : isOfflineMode ? 'Modo Offline' : lastSync ? `Sinc: ${lastSync}` : 'Conectado'}
+                    </span>
                     {!session.isMaster && <span className="ml-1 text-[10px] bg-blue-100 text-blue-700 px-1 rounded">Leitor</span>}
                 </div>
 
@@ -308,7 +328,7 @@ const App: React.FC = () => {
           </div>
         </div>
         {statusMsg && (
-            <div className={`text-white text-xs text-center py-1 absolute w-full top-14 left-0 animate-fade-in z-20 ${statusMsg.includes('Erro') ? 'bg-red-600' : 'bg-green-600'}`}>
+            <div className={`text-white text-xs text-center py-1 absolute w-full top-14 left-0 animate-fade-in z-20 ${statusMsg.includes('Erro') ? 'bg-red-600' : statusMsg.includes('Offline') || statusMsg.includes('Teste') ? 'bg-orange-500' : 'bg-green-600'}`}>
                 {statusMsg}
             </div>
         )}
@@ -318,15 +338,19 @@ const App: React.FC = () => {
         {entries.length === 0 && clients.length === 0 ? (
           <div className="flex flex-col items-center justify-center min-h-[50vh] animate-fade-in-up">
             <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center max-w-lg">
-                <div className="bg-blue-50 p-3 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                    <Cloud className="text-blue-600 h-8 w-8" />
+                <div className={`${isOfflineMode ? 'bg-orange-50' : 'bg-blue-50'} p-3 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4`}>
+                    {isOfflineMode ? <CloudOff className="text-orange-500 h-8 w-8" /> : <Cloud className="text-blue-600 h-8 w-8" />}
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900">Base de Dados na Nuvem</h2>
+                <h2 className="text-2xl font-bold text-gray-900">
+                    {isOfflineMode ? 'Modo de Teste (Offline)' : 'Base de Dados na Nuvem'}
+                </h2>
                 
-                {session.isMaster ? (
+                {session.isMaster || isOfflineMode ? (
                     <>
                         <p className="mt-2 text-gray-500 mb-8 text-sm leading-relaxed">
-                            O banco de dados está vazio. Importe uma planilha ou um backup para iniciar e sincronizar com toda a equipe.
+                            {isOfflineMode 
+                             ? "Este ambiente não possui conexão com banco de dados. Importe seus dados para testar a interface localmente." 
+                             : "O banco de dados está vazio ou não conectado. Importe uma planilha ou um backup para iniciar e sincronizar."}
                         </p>
                         <div className="flex justify-center">
                             <FileUpload onDataLoaded={handleDataLoaded} onBackupLoaded={handleBackupLoaded} />
