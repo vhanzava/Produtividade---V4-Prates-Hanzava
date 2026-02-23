@@ -90,6 +90,24 @@ export const parseCSV = (csvContent: string): TimeEntry[] => {
   return entries;
 };
 
+// Helper: Count working days (Mon-Sat) in range
+const countWorkingDays = (start: Date, end: Date): number => {
+  let count = 0;
+  const current = new Date(start);
+  current.setHours(0,0,0,0);
+  const last = new Date(end);
+  last.setHours(0,0,0,0);
+
+  while (current <= last) {
+    const day = current.getDay();
+    if (day !== 0) { // 0 is Sunday. Mon(1)-Sat(6) are working days.
+      count++;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  return count;
+};
+
 export const calculateSummary = (
   entries: TimeEntry[], 
   employees: EmployeeConfig[], 
@@ -127,13 +145,12 @@ export const calculateSummary = (
 
     if (effectiveStart > effectiveEnd) return 0;
 
-    const totalDaysInMonth = monthEnd.getDate();
-    const diffMs = effectiveEnd.getTime() - effectiveStart.getTime();
-    const daysOverlap = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
-    
-    const safeDays = Math.max(0, Math.min(daysOverlap, totalDaysInMonth));
+    const totalWorkingDaysInMonth = countWorkingDays(monthStart, monthEnd);
+    if (totalWorkingDaysInMonth === 0) return 0;
 
-    return safeDays / totalDaysInMonth;
+    const workingDaysOverlap = countWorkingDays(effectiveStart, effectiveEnd);
+    
+    return workingDaysOverlap / totalWorkingDaysInMonth;
   };
 
   // 1. Calculate Costs
