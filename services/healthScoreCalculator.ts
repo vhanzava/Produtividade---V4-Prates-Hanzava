@@ -27,7 +27,10 @@ const SCORES = {
       lt_3_6: { roi_lt_3: 15, roi_3: 12, roi_2: 6, roi_1: 0, roi_gt_1: -7.5 },
       lt_gt_6: { roi_lt_3: 12, roi_3: 6, roi_2: 0, roi_1: -4.5, roi_gt_1: -15 }
     },
-    growth: { perfil_a_lt_50k: 5, perfil_b_gt_50k: 5, negativo: -10 },
+    growth: { 
+      perfil_a_lt_50k: 5, perfil_b_gt_50k: 5, negativo: -10,
+      growth_high: 5, growth_medium: 2.5, growth_low: 0, growth_negative: -10
+    },
     engagement: { alta_perf: 5, estavel: 2.5, atencao: -2.5, critico: -10 }
   },
   v3: {

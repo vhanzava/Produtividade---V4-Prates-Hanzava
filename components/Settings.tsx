@@ -320,6 +320,21 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                         onChange={e => setNewClientFee(e.target.value)}
                     />
                 </div>
+                <div className="w-40">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Account Manager</label>
+                    <select 
+                        className={INPUT_STYLE}
+                        value={(localClients.find(c => c.name === newClientName)?.accountManager) || ''}
+                        onChange={e => {
+                            // This is tricky because we are adding a new client. 
+                            // We need a state for newClientAccountManager.
+                            // But for now let's just add it to the table row editing.
+                        }}
+                        disabled
+                    >
+                        <option value="">(Adicionar na tabela)</option>
+                    </select>
+                </div>
                 <button 
                     onClick={handleAddClient}
                     disabled={!newClientName}
@@ -337,6 +352,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Fee Recorrente {selectedMonth !== 'default' && '(Mês)'}
                     </th>
@@ -385,6 +401,18 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     onChange={(e) => handleClientChange(realIndex, 'category', e.target.value)}
                                 >
                                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <select 
+                                    className={INPUT_STYLE}
+                                    value={client.accountManager || ''}
+                                    onChange={(e) => handleClientChange(realIndex, 'accountManager', e.target.value)}
+                                >
+                                    <option value="">Selecione...</option>
+                                    {localEmps.map(emp => (
+                                        <option key={emp.name} value={emp.name}>{emp.name}</option>
+                                    ))}
                                 </select>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

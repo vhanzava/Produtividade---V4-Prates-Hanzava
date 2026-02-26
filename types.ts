@@ -34,6 +34,7 @@ export interface ClientConfig {
   defaultFee: number;
   oneTimeFee?: number; // Valor de Implementação/Setup
   contractStartDate?: string; // YYYY-MM-DD
+  accountManager?: string; // New field for Health Score
   history: Record<string, number>; // key: "YYYY-MM", value: fee
 }
 
@@ -99,7 +100,7 @@ export type HealthAdimplencia = 'em_dia' | 'ate_10_dias' | 'mais_30_dias';
 export type HealthRecarga = 'no_dia' | 'ate_10_dias' | 'mais_30_dias';
 
 export type HealthRoiBucket = 'roi_lt_3' | 'roi_3' | 'roi_2' | 'roi_1' | 'roi_gt_1';
-export type HealthGrowth = 'perfil_a_lt_50k' | 'perfil_b_gt_50k' | 'negativo';
+export type HealthGrowth = 'perfil_a_lt_50k' | 'perfil_b_gt_50k' | 'negativo' | 'growth_high' | 'growth_medium' | 'growth_low' | 'growth_negative';
 export type HealthEngagement = 'alta_perf' | 'estavel' | 'atencao' | 'critico';
 
 export type HealthCheckinProdutivo = 'sim' | 'parcial' | 'nao';
@@ -142,6 +143,7 @@ export interface HealthInput {
   
   // Metadata
   results_focus: 'roi' | 'social' | 'both';
+  social_profile?: 'A' | 'B'; // A (<50k), B (>50k)
   last_updated_engagement?: string;
   last_updated_results?: string;
   last_updated_relationship?: string;

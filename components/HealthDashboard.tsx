@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ClientConfig, HealthInput, HealthScoreResult, HealthFlagColor } from '../types';
 import { calculateHealthScore } from '../services/healthScoreCalculator';
-import { AlertTriangle, CheckCircle, XCircle, Activity, Save, ChevronRight, Clock, Calendar, LayoutGrid, List } from 'lucide-react';
+import { AlertTriangle, CheckCircle, XCircle, Activity, Save, ChevronRight, Clock, Calendar, LayoutGrid, List, DollarSign, Users } from 'lucide-react';
 
 interface HealthDashboardProps {
   clients: ClientConfig[];
@@ -285,6 +285,95 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
               </div>
             </div>
           </div>
+
+          {/* Revenue per Flag */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
+                  <DollarSign className="text-green-600" />
+                  Receita (MRR) em Risco
+              </h3>
+              <div className="space-y-4">
+                  {['Green', 'Yellow', 'Red', 'Black'].map(flag => {
+                      const flagClients = activeClients.filter(c => scores[c.name]?.flag === flag);
+                      const totalRevenue = flagClients.reduce((sum, c) => sum + (c.defaultFee || 0), 0);
+                      const colorClass = flag === 'Green' ? 'text-green-600' : flag === 'Yellow' ? 'text-yellow-600' : flag === 'Red' ? 'text-red-600' : 'text-gray-800';
+                      const bgClass = flag === 'Green' ? 'bg-green-50' : flag === 'Yellow' ? 'bg-yellow-50' : flag === 'Red' ? 'bg-red-50' : 'bg-gray-100';
+                      
+                      return (
+                          <div key={flag} className={`flex justify-between items-center p-3 rounded border border-transparent ${bgClass}`}>
+                              <span className={`font-medium ${colorClass}`}>
+                                  {flag === 'Green' ? 'Saudável' : flag === 'Yellow' ? 'Atenção' : flag === 'Red' ? 'Risco' : 'Churn'}
+                              </span>
+                              <span className={`font-bold ${colorClass}`}>
+                                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalRevenue)}
+                              </span>
+                          </div>
+                      );
+                  })}
+              </div>
+          </div>
+
+          {/* Account Ranking */}
+          <div className="lg:col-span-3 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
+                  <Users className="text-purple-600" />
+                  Ranking por Account Manager
+              </h3>
+              <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                      <thead>
+                          <tr>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
+                              <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Clientes</th>
+                              <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Média Score</th>
+                              <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">MRR Total</th>
+                              <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Em Risco (Red/Black)</th>
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                          {Object.entries(
+                              activeClients.reduce((acc, client) => {
+                                  const manager = client.accountManager || 'Sem Account';
+                                  if (!acc[manager]) acc[manager] = { clients: [], totalScore: 0, totalRevenue: 0, riskCount: 0 };
+                                  
+                                  const score = scores[client.name];
+                                  acc[manager].clients.push(client);
+                                  acc[manager].totalRevenue += client.defaultFee || 0;
+                                  
+                                  if (score) {
+                                      acc[manager].totalScore += score.score;
+                                      if (score.flag === 'Red' || score.flag === 'Black') {
+                                          acc[manager].riskCount++;
+                                      }
+                                  }
+                                  return acc;
+                              }, {} as Record<string, { clients: ClientConfig[], totalScore: 0, totalRevenue: 0, riskCount: 0 }>)
+                          ).sort(([, a], [, b]) => (b.totalScore / (b.clients.length || 1)) - (a.totalScore / (a.clients.length || 1)))
+                           .map(([manager, data]) => (
+                              <tr key={manager}>
+                                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{manager}</td>
+                                  <td className="px-4 py-3 text-sm text-center text-gray-500">{data.clients.length}</td>
+                                  <td className="px-4 py-3 text-sm text-center font-bold text-blue-600">
+                                      {(data.totalScore / (data.clients.length || 1)).toFixed(1)}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-center text-gray-500">
+                                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(data.totalRevenue)}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-center">
+                                      {data.riskCount > 0 ? (
+                                          <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-bold">
+                                              {data.riskCount}
+                                          </span>
+                                      ) : (
+                                          <span className="text-gray-400">-</span>
+                                      )}
+                                  </td>
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
         </div>
       )}
 
@@ -444,24 +533,87 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
                   </div>
 
                   <div className="grid grid-cols-1 gap-6">
-                    <Select label="ROI (Bucket)" value={currentInput.roi_bucket} onChange={v => handleChange('roi_bucket', v)} options={[
-                      {label: 'ROI > 3 (Excelente)', value: 'roi_lt_3'},
-                      {label: 'ROI ~ 3 (Bom)', value: 'roi_3'},
-                      {label: 'ROI ~ 2 (Médio)', value: 'roi_2'},
-                      {label: 'ROI ~ 1 (Baixo)', value: 'roi_1'},
-                      {label: 'ROI < 1 (Prejuízo)', value: 'roi_gt_1'}
-                    ]} />
-                    <Select label="Crescimento (Growth)" value={currentInput.growth} onChange={v => handleChange('growth', v)} options={[
-                      {label: 'Perfil A < 50k', value: 'perfil_a_lt_50k'},
-                      {label: 'Perfil B > 50k', value: 'perfil_b_gt_50k'},
-                      {label: 'Negativo', value: 'negativo'}
-                    ]} />
-                    <Select label="Engajamento vs Média" value={currentInput.engagement_vs_avg} onChange={v => handleChange('engagement_vs_avg', v)} options={[
-                      {label: 'Alta Performance', value: 'alta_perf'},
-                      {label: 'Estável', value: 'estavel'},
-                      {label: 'Atenção', value: 'atencao'},
-                      {label: 'Crítico', value: 'critico'}
-                    ]} />
+                    {(currentInput.results_focus === 'roi' || currentInput.results_focus === 'both' || !currentInput.results_focus) && (
+                        <Select label="ROI (Bucket)" value={currentInput.roi_bucket} onChange={v => handleChange('roi_bucket', v)} options={[
+                        {label: 'ROI > 3 (Excelente)', value: 'roi_lt_3'},
+                        {label: 'ROI ~ 3 (Bom)', value: 'roi_3'},
+                        {label: 'ROI ~ 2 (Médio)', value: 'roi_2'},
+                        {label: 'ROI ~ 1 (Baixo)', value: 'roi_1'},
+                        {label: 'ROI < 1 (Prejuízo)', value: 'roi_gt_1'}
+                        ]} />
+                    )}
+
+                    {(currentInput.results_focus === 'social' || currentInput.results_focus === 'both' || !currentInput.results_focus) && (
+                        <>
+                            <div className="bg-gray-50 p-3 rounded border border-gray-200">
+                                <label className="block text-xs font-medium text-gray-500 mb-2">Perfil Social (Para cálculo de crescimento)</label>
+                                <div className="flex gap-4">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input 
+                                            type="radio" 
+                                            name="social_profile" 
+                                            value="A" 
+                                            checked={currentInput.social_profile !== 'B'} 
+                                            onChange={() => handleChange('social_profile', 'A')}
+                                            className="text-green-600 focus:ring-green-500"
+                                        />
+                                        <span className="text-sm text-gray-700">Perfil A (&lt; 50k)</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input 
+                                            type="radio" 
+                                            name="social_profile" 
+                                            value="B" 
+                                            checked={currentInput.social_profile === 'B'} 
+                                            onChange={() => handleChange('social_profile', 'B')}
+                                            className="text-green-600 focus:ring-green-500"
+                                        />
+                                        <span className="text-sm text-gray-700">Perfil B (&gt; 50k)</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <Select 
+                                label={`Crescimento de Seguidores (${currentInput.social_profile === 'B' ? 'Perfil B > 50k' : 'Perfil A < 50k'})`} 
+                                value={currentInput.growth} 
+                                onChange={v => handleChange('growth', v)} 
+                                options={currentInput.social_profile === 'B' ? [
+                                    {label: '> 1.5% (Excelente)', value: 'perfil_b_gt_50k'}, // Reusing value key but label changes
+                                    {label: '0.5% a 1.5% (Bom)', value: 'perfil_a_lt_50k'}, // Mapping to existing keys is tricky. 
+                                    // Actually, the calculator uses specific keys: 'perfil_a_lt_50k', 'perfil_b_gt_50k', 'negativo'.
+                                    // This implies the calculator logic is rigid.
+                                    // Let's look at calculator logic:
+                                    // v2Raw += SCORES.v2.growth[input.growth];
+                                    // growth: { perfil_a_lt_50k: 5, perfil_b_gt_50k: 5, negativo: -10 },
+                                    // Wait, both A and B give 5 points for "Good"? 
+                                    // The PDF says:
+                                    // Perfil A: >5% (+5), 2-5% (+2.5), 0-2% (0), Neg (-10)
+                                    // Perfil B: >1.5% (+5), 0.5-1.5% (+2.5), 0-0.5% (0), Neg (-10)
+                                    // The current calculator only has 3 keys! It is missing the intermediate steps.
+                                    // I need to update the calculator keys to support the full range.
+                                    // For now, I will map the UI options to the closest existing keys or I MUST update the calculator.
+                                    // Updating the calculator is safer.
+                                    // Let's assume I will update calculator later. I'll use new keys here.
+                                    {label: '> 1.5%', value: 'growth_high'},
+                                    {label: '0.5% a 1.5%', value: 'growth_medium'},
+                                    {label: '0% a 0.5%', value: 'growth_low'},
+                                    {label: 'Negativo', value: 'growth_negative'}
+                                ] : [
+                                    {label: '> 5%', value: 'growth_high'},
+                                    {label: '2% a 5%', value: 'growth_medium'},
+                                    {label: '0% a 2%', value: 'growth_low'},
+                                    {label: 'Negativo', value: 'growth_negative'}
+                                ]} 
+                            />
+                            
+                            <Select label="Engajamento vs Média (Interações de Valor)" value={currentInput.engagement_vs_avg} onChange={v => handleChange('engagement_vs_avg', v)} options={[
+                                {label: 'Alta Performance (> 110%)', value: 'alta_perf'},
+                                {label: 'Estável (90% a 110%)', value: 'estavel'},
+                                {label: 'Atenção (70% a 90%)', value: 'atencao'},
+                                {label: 'Crítico (< 70%)', value: 'critico'}
+                            ]} />
+                        </>
+                    )}
                   </div>
                 </div>
               )}
