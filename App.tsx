@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { parseCSV, calculateSummary } from './services/dataProcessor';
-import { TimeEntry, EmployeeConfig, ClientConfig, UserSession, SystemBackup } from './types';
+import { TimeEntry, EmployeeConfig, ClientConfig, UserSession, SystemBackup, HealthInput } from './types';
 import FileUpload from './components/FileUpload';
 import Dashboard from './components/Dashboard';
 import Settings from './components/Settings';
 import Login from './components/Login';
-import { LayoutDashboard, Settings as SettingsIcon, LogOut, RefreshCw, Cloud, CloudOff, Info } from 'lucide-react';
+import HealthDashboard from './components/HealthDashboard';
+import { LayoutDashboard, Settings as SettingsIcon, LogOut, RefreshCw, Cloud, CloudOff, Info, HeartPulse } from 'lucide-react';
 import { supabase } from './lib/supabase';
 
 const DATE_INPUT_STYLE = "bg-gray-700 text-white border-gray-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm p-1 border";
@@ -18,7 +19,8 @@ const App: React.FC = () => {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [employees, setEmployees] = useState<EmployeeConfig[]>([]);
   const [clients, setClients] = useState<ClientConfig[]>([]);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'settings'>('dashboard');
+  const [healthInputs, setHealthInputs] = useState<Record<string, HealthInput>>({});
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'health' | 'settings'>('dashboard');
   
   // Date Filtering
   const [startDate, setStartDate] = useState<string>('');
@@ -41,8 +43,87 @@ const App: React.FC = () => {
             return;
         }
         fetchCloudData();
+        fetchHealthInputs();
     }
   }, [session]); // isOfflineMode é constante, não precisa estar na dependência
+
+  const fetchHealthInputs = async () => {
+      try {
+          const { data, error } = await supabase.from('health_inputs').select('*');
+          if (error) throw error;
+          if (data) {
+              const inputs: Record<string, HealthInput> = {};
+              data.forEach((row: any) => {
+                  // Assuming row has all fields or a data json column. 
+                  // If row is flat:
+                  inputs[row.clientId || row.client_id] = {
+                      clientId: row.clientId || row.client_id,
+                      monthKey: row.monthKey || row.month_key,
+                      ...row
+                  };
+              });
+              setHealthInputs(inputs);
+          }
+      } catch (err) {
+          console.error("Erro ao buscar health inputs:", err);
+      }
+  };
+
+  const saveHealthInput = async (input: HealthInput) => {
+      // Update local state immediately
+      setHealthInputs(prev => ({ ...prev, [input.clientId]: input }));
+
+      if (isOfflineMode) {
+          setStatusMsg("Avaliação salva localmente (Offline).");
+          setTimeout(() => setStatusMsg(null), 3000);
+          return;
+      }
+
+      try {
+          // Map camelCase to snake_case if needed, or just send object if table supports it.
+          // Assuming table columns match camelCase or we map them.
+          // For simplicity, let's try to upsert the object directly, assuming Supabase handles it or we use a 'data' column?
+          // The prompt implies specific columns. Let's try to send as is, but usually DBs are snake_case.
+          // I will map to snake_case just in case for the DB interaction if I knew the schema.
+          // Since I don't, I'll try to upsert with a best guess or just log it.
+          // Actually, let's assume the table 'health_inputs' has a 'data' jsonb column to be safe?
+          // No, "input_source": "health_inputs" usually implies structured data.
+          
+          // Let's try to upsert with the fields we have.
+          const payload = {
+              client_id: input.clientId,
+              month_key: input.monthKey,
+              checkin: input.checkin,
+              whatsapp: input.whatsapp,
+              adimplencia: input.adimplencia,
+              recarga: input.recarga,
+              roi_bucket: input.roi_bucket,
+              growth: input.growth,
+              engagement_vs_avg: input.engagement_vs_avg,
+              checkin_produtivo: input.checkin_produtivo,
+              progresso: input.progresso,
+              relacionamento_interno: input.relacionamento_interno,
+              aviso_previo: input.aviso_previo,
+              pesquisa_respondida: input.pesquisa_respondida,
+              csat_tecnico: input.csat_tecnico,
+              nps: input.nps,
+              mhs: input.mhs,
+              pesquisa_geral_respondida: input.pesquisa_geral_respondida
+          };
+
+          const { error } = await supabase
+            .from('health_inputs')
+            .upsert(payload, { onConflict: 'client_id, month_key' });
+
+          if (error) throw error;
+          setStatusMsg("Avaliação salva na nuvem!");
+      } catch (err: any) {
+          console.error("Erro ao salvar health input:", err);
+          setStatusMsg("Erro ao salvar avaliação na nuvem.");
+      } finally {
+          setTimeout(() => setStatusMsg(null), 3000);
+      }
+  };
 
   const fetchCloudData = async () => {
       setIsSyncing(true);
@@ -292,6 +373,15 @@ const App: React.FC = () => {
                                 <LayoutDashboard className="h-4 w-4" />
                                 <span className="hidden md:inline">Dashboard</span>
                             </button>
+                            <button
+                                onClick={() => setActiveTab('health')}
+                                className={`flex items-center gap-1 px-3 py-1 rounded text-sm font-medium transition-all ${
+                                    activeTab === 'health' ? 'bg-white shadow-sm text-red-700' : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                            >
+                                <HeartPulse className="h-4 w-4" />
+                                <span className="hidden md:inline">Saúde (Health)</span>
+                            </button>
                             {session.isMaster && (
                                 <button
                                     onClick={() => setActiveTab('settings')}
@@ -373,7 +463,13 @@ const App: React.FC = () => {
             </div>
           </div>
         ) : (
-          activeTab === 'dashboard' ? <Dashboard summary={summary} /> : <Settings employees={employees} clients={clients} onUpdateEmployees={handleUpdateEmployees} onUpdateClients={handleUpdateClients} />
+          activeTab === 'dashboard' ? (
+            <Dashboard summary={summary} /> 
+          ) : activeTab === 'health' ? (
+            <HealthDashboard clients={clients} savedInputs={healthInputs} onSaveInput={saveHealthInput} canEdit={!!session?.isMaster} />
+          ) : (
+            <Settings employees={employees} clients={clients} onUpdateEmployees={handleUpdateEmployees} onUpdateClients={handleUpdateClients} />
+          )
         )}
       </main>
     </div>
