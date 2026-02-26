@@ -80,20 +80,51 @@ export const calculateHealthScore = (input: HealthInput, clientConfig: ClientCon
   let v2Raw = 0;
   const ltMonths = calculateLifetimeMonths(clientConfig.contractStartDate);
   
-  // ROI Logic
+  // Determine Focus Weights
+  const focus = input.results_focus || 'both'; // Default to both if undefined
+  
+  // ROI Score Calculation
   let roiScore = 0;
+  // Determine ROI score based on LT
+  let roiBaseScore = 0;
+  // Mapping ROI bucket to base values before LT adjustment
+  // Actually, the previous logic had LT built into the map. Let's reuse that but we need to know the "max" points to redistribute.
+  // The PDF says: 
+  // - ROI Only: 25 pts
+  // - Social Only: 25 pts
+  // - Both: ROI 15 pts (60%), Social 10 pts (40%)
+  
+  // Current implementation has hardcoded values in SCORES.v2.roi which sum up to roughly 15 pts for "Both" scenario?
+  // Let's check: roi_lt_3 is 15. growth is 5. engagement is 5. Total 25.
+  // So the current implementation assumes "Both" (15 ROI + 10 Social).
+  
+  // We need to adjust based on focus.
+  
+  // Calculate Raw ROI Component (Max 15 in current map)
+  let rawRoiComponent = 0;
   if (ltMonths <= 2) {
-    roiScore = SCORES.v2.roi.lt_ate_2[input.roi_bucket];
+    rawRoiComponent = SCORES.v2.roi.lt_ate_2[input.roi_bucket];
   } else if (ltMonths <= 6) {
-    roiScore = SCORES.v2.roi.lt_3_6[input.roi_bucket];
+    rawRoiComponent = SCORES.v2.roi.lt_3_6[input.roi_bucket];
   } else {
-    roiScore = SCORES.v2.roi.lt_gt_6[input.roi_bucket];
+    rawRoiComponent = SCORES.v2.roi.lt_gt_6[input.roi_bucket];
   }
-  v2Raw += roiScore;
 
-  // Social Logic
-  v2Raw += SCORES.v2.growth[input.growth];
-  v2Raw += SCORES.v2.engagement[input.engagement_vs_avg];
+  // Calculate Raw Social Component (Max 10 in current map)
+  let rawSocialComponent = SCORES.v2.growth[input.growth] + SCORES.v2.engagement[input.engagement_vs_avg];
+
+  if (focus === 'roi') {
+    // ROI Only: ROI is 25 pts (100%). Social is 0.
+    // Scale ROI from 15 base to 25. (x 1.66)
+    v2Raw = rawRoiComponent * (25/15);
+  } else if (focus === 'social') {
+    // Social Only: Social is 25 pts (100%). ROI is 0.
+    // Scale Social from 10 base to 25. (x 2.5)
+    v2Raw = rawSocialComponent * (2.5);
+  } else {
+    // Both: ROI 15 pts, Social 10 pts. (Default)
+    v2Raw = rawRoiComponent + rawSocialComponent;
+  }
 
   const v2Final = v2Raw * WEIGHTS.vertical_2.multiplier;
 

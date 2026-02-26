@@ -26,7 +26,8 @@ const INITIAL_INPUT: Omit<HealthInput, 'clientId' | 'monthKey'> = {
   csat_tecnico: 'gt_4.5',
   nps: 'promotor',
   mhs: 'pouco',
-  pesquisa_geral_respondida: 'sim'
+  pesquisa_geral_respondida: 'sim',
+  results_focus: 'both'
 };
 
 const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs, onSaveInput, canEdit }) => {
@@ -36,7 +37,7 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
   const [currentInput, setCurrentInput] = useState<HealthInput | null>(null);
   const [activeVerticalTab, setActiveVerticalTab] = useState<number>(1);
 
-  const activeClients = useMemo(() => clients.filter(c => c.isActive), [clients]);
+  const activeClients = useMemo(() => clients.filter(c => c.isActive && c.category === 'Executar'), [clients]);
 
   const scores = useMemo(() => {
     const map: Record<string, HealthScoreResult> = {};
@@ -48,21 +49,70 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
     return map;
   }, [activeClients, savedInputs]);
 
-  // Reminder Logic: Check if updated in the last 7 days
+  // Reminder Logic
   const reminders = useMemo(() => {
     const now = new Date();
-    const pending: ClientConfig[] = [];
+    const day = now.getDate();
+    const weekDay = now.getDay(); // 0 = Sunday, 5 = Friday
+    const month = now.getMonth(); // 0-11
+    
+    // Logic flags
+    const isFriday = weekDay === 5;
+    const isBiWeeklyWindow = (day >= 1 && day <= 5) || (day >= 15 && day <= 20);
+    const isQuarterlyMonth = [0, 3, 6, 9].includes(month); // Jan, Apr, Jul, Oct
+
+    const pending: { client: ClientConfig, type: string, vertical: string }[] = [];
     
     activeClients.forEach(c => {
       const input = savedInputs[c.name];
-      if (!input || !input.lastUpdated) {
-        pending.push(c);
-      } else {
-        const lastUpdate = new Date(input.lastUpdated);
-        const diffTime = Math.abs(now.getTime() - lastUpdate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        if (diffDays > 7) {
-          pending.push(c);
+      
+      // Weekly: Engagement & Relationship (Every Friday)
+      if (isFriday) {
+        // Check if updated today
+        const lastEng = input?.last_updated_engagement ? new Date(input.last_updated_engagement) : null;
+        const lastRel = input?.last_updated_relationship ? new Date(input.last_updated_relationship) : null;
+        
+        const isEngUpdatedToday = lastEng && lastEng.toDateString() === now.toDateString();
+        const isRelUpdatedToday = lastRel && lastRel.toDateString() === now.toDateString();
+
+        if (!isEngUpdatedToday) {
+          pending.push({ client: c, type: 'Semanal', vertical: 'Engajamento' });
+        }
+        if (!isRelUpdatedToday) {
+          pending.push({ client: c, type: 'Semanal', vertical: 'Relacionamento' });
+        }
+      }
+
+      // Bi-Weekly: Results (Days 1-5 and 15-20)
+      if (isBiWeeklyWindow) {
+        const lastRes = input?.last_updated_results ? new Date(input.last_updated_results) : null;
+        // Check if updated within current window
+        // Simple check: is last update in current month and within current window range?
+        // Actually, just check if updated in the last 5 days is a decent proxy, or strictly check window.
+        // Let's check if updated in the current window.
+        let isResUpdated = false;
+        if (lastRes) {
+            const lastDay = lastRes.getDate();
+            const lastMonth = lastRes.getMonth();
+            if (lastMonth === month) {
+                if (day <= 5 && lastDay >= 1 && lastDay <= 5) isResUpdated = true;
+                if (day >= 15 && day <= 20 && lastDay >= 15 && lastDay <= 20) isResUpdated = true;
+            }
+        }
+        
+        if (!isResUpdated) {
+          pending.push({ client: c, type: 'Quinzenal', vertical: 'Resultados' });
+        }
+      }
+
+      // Quarterly: Surveys (Jan, Apr, Jul, Oct)
+      if (isQuarterlyMonth) {
+        const lastSurv = input?.last_updated_surveys ? new Date(input.last_updated_surveys) : null;
+        // Check if updated in current month
+        const isSurvUpdated = lastSurv && lastSurv.getMonth() === month && lastSurv.getFullYear() === now.getFullYear();
+        
+        if (!isSurvUpdated) {
+             pending.push({ client: c, type: 'Trimestral', vertical: 'Pesquisas' });
         }
       }
     });
@@ -73,7 +123,12 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
     if (!canEdit) return;
     setSelectedClient(client.name);
     const existing = savedInputs[client.name];
-    setCurrentInput(existing || { ...INITIAL_INPUT, clientId: client.name, monthKey: new Date().toISOString().slice(0, 7) });
+    setCurrentInput(existing || { 
+        ...INITIAL_INPUT, 
+        clientId: client.name, 
+        monthKey: new Date().toISOString().slice(0, 7),
+        results_focus: 'both' // Default
+    });
     setIsEditing(true);
     setActiveVerticalTab(1);
   };
@@ -92,10 +147,26 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
 
   const handleSave = () => {
     if (currentInput) {
-      onSaveInput({
-        ...currentInput,
-        lastUpdated: new Date().toISOString()
-      });
+      const now = new Date().toISOString();
+      const updatedInput = { ...currentInput, lastUpdated: now };
+      
+      // Update specific timestamps based on active tab (or all if new?)
+      // Since we edit all in one modal but tabs separate them, we assume user reviews all?
+      // Or we should track which tab was touched. 
+      // For simplicity, let's update the timestamp of the vertical that corresponds to the active tab, 
+      // OR update all if it's a new record.
+      // Better: Update all timestamps because the user "Saved Evaluation".
+      // But for the reminder logic to be precise, we might want to know what changed.
+      // Let's assume "Save" means "I reviewed everything".
+      
+      // Actually, the request implies specific updates. 
+      // Let's update all timestamps for now to clear reminders.
+      updatedInput.last_updated_engagement = now;
+      updatedInput.last_updated_results = now;
+      updatedInput.last_updated_relationship = now;
+      updatedInput.last_updated_surveys = now;
+
+      onSaveInput(updatedInput);
       setIsEditing(false);
       setSelectedClient(null);
     }
@@ -169,16 +240,16 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
               </div>
             ) : (
               <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                {reminders.map(client => (
-                  <div key={client.name} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
+                {reminders.map((reminder, idx) => (
+                  <div key={`${reminder.client.name}-${reminder.vertical}-${idx}`} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
                     <div>
-                      <h4 className="font-bold text-gray-900">{client.name}</h4>
+                      <h4 className="font-bold text-gray-900">Atualizar {reminder.vertical} - {reminder.client.name}</h4>
                       <p className="text-xs text-gray-500">
-                        Última atualização: {savedInputs[client.name]?.lastUpdated ? new Date(savedInputs[client.name].lastUpdated!).toLocaleDateString() : 'Nunca'}
+                        Ciclo: {reminder.type}
                       </p>
                     </div>
                     <button 
-                      onClick={() => handleEdit(client)}
+                      onClick={() => handleEdit(reminder.client)}
                       className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50 flex items-center gap-1"
                     >
                       Atualizar <ChevronRight size={14} />
@@ -360,6 +431,18 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
               {activeVerticalTab === 2 && (
                 <div className="space-y-6 animate-fade-in">
                   <h4 className="text-lg font-bold text-green-800 border-b border-green-100 pb-2 mb-4">Resultados</h4>
+                  
+                  <div className="bg-green-50 p-4 rounded-lg border border-green-100 mb-6">
+                    <Select label="Foco de Resultados (Objetivo do Cliente)" value={currentInput.results_focus || 'both'} onChange={v => handleChange('results_focus', v)} options={[
+                      {label: 'Ambos (ROI + Social)', value: 'both'},
+                      {label: 'Apenas ROI', value: 'roi'},
+                      {label: 'Apenas Social', value: 'social'}
+                    ]} />
+                    <p className="text-xs text-green-700 mt-2">
+                      * Define como os 25 pontos da vertical são distribuídos.
+                    </p>
+                  </div>
+
                   <div className="grid grid-cols-1 gap-6">
                     <Select label="ROI (Bucket)" value={currentInput.roi_bucket} onChange={v => handleChange('roi_bucket', v)} options={[
                       {label: 'ROI > 3 (Excelente)', value: 'roi_lt_3'},

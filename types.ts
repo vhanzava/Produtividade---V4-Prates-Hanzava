@@ -140,7 +140,13 @@ export interface HealthInput {
   mhs: HealthMhs;
   pesquisa_geral_respondida: HealthPesquisaRespondida;
   
-  lastUpdated?: string; // ISO Date string
+  // Metadata
+  results_focus: 'roi' | 'social' | 'both';
+  last_updated_engagement?: string;
+  last_updated_results?: string;
+  last_updated_relationship?: string;
+  last_updated_surveys?: string;
+  lastUpdated?: string; // Legacy/Global fallback
 }
 
 export type HealthFlagColor = 'Black' | 'Red' | 'Yellow' | 'Green';

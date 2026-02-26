@@ -76,6 +76,13 @@ const App: React.FC = () => {
                       nps: row.nps,
                       mhs: row.mhs,
                       pesquisa_geral_respondida: row.pesquisa_geral_respondida,
+                      
+                      // Metadata
+                      results_focus: row.results_focus,
+                      last_updated_engagement: row.last_updated_engagement,
+                      last_updated_results: row.last_updated_results,
+                      last_updated_relationship: row.last_updated_relationship,
+                      last_updated_surveys: row.last_updated_surveys,
                       lastUpdated: row.last_updated || row.lastUpdated
                   };
               });
@@ -116,6 +123,13 @@ const App: React.FC = () => {
               nps: input.nps,
               mhs: input.mhs,
               pesquisa_geral_respondida: input.pesquisa_geral_respondida,
+              
+              // Metadata
+              results_focus: input.results_focus,
+              last_updated_engagement: input.last_updated_engagement,
+              last_updated_results: input.last_updated_results,
+              last_updated_relationship: input.last_updated_relationship,
+              last_updated_surveys: input.last_updated_surveys,
               last_updated: input.lastUpdated,
               updated_at: new Date().toISOString()
           };
