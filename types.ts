@@ -139,6 +139,8 @@ export interface HealthInput {
   nps: HealthNps;
   mhs: HealthMhs;
   pesquisa_geral_respondida: HealthPesquisaRespondida;
+  
+  lastUpdated?: string; // ISO Date string
 }
 
 export type HealthFlagColor = 'Black' | 'Red' | 'Yellow' | 'Green';
