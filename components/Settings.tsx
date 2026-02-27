@@ -349,6 +349,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                 <thead>
                     <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">Contrato</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Início</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
@@ -386,6 +387,14 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     accept="application/pdf"
                                     ref={el => fileInputRefs.current[realIndex] = el}
                                     onChange={(e) => handleContractUpload(e, realIndex)}
+                                />
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <input
+                                    type="date"
+                                    className={INPUT_STYLE}
+                                    value={client.contractStartDate || ''}
+                                    onChange={(e) => handleClientChange(realIndex, 'contractStartDate', e.target.value)}
                                 />
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

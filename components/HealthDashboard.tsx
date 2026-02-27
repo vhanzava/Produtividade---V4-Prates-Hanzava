@@ -29,7 +29,8 @@ const INITIAL_INPUT: Omit<HealthInput, 'clientId' | 'monthKey'> = {
   nps: 'promotor',
   mhs: 'pouco',
   pesquisa_geral_respondida: 'sim',
-  results_focus: 'both'
+  results_focus: 'both',
+  mensura_resultado_financeiro: 'sim'
 };
 
 const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs, allHealthInputs = [], onSaveInput, canEdit }) => {
@@ -748,7 +749,19 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
                   </div>
 
                   <div className="grid grid-cols-1 gap-6">
-                    {(currentInput.results_focus === 'roi' || currentInput.results_focus === 'both' || !currentInput.results_focus) && (
+                    <div className="bg-green-50 p-4 rounded-lg border border-green-100">
+                        <Select label="Conseguimos mensurar resultado financeiro (faturamento)?" value={currentInput.mensura_resultado_financeiro || 'sim'} onChange={v => handleChange('mensura_resultado_financeiro', v)} options={[
+                          {label: 'Sim', value: 'sim'},
+                          {label: 'Não', value: 'nao'}
+                        ]} />
+                        {currentInput.mensura_resultado_financeiro === 'nao' && (
+                            <p className="text-xs text-red-600 mt-2 font-bold">
+                                * Penalidade de -15 pontos aplicada.
+                            </p>
+                        )}
+                    </div>
+
+                    {(currentInput.mensura_resultado_financeiro !== 'nao') && (currentInput.results_focus === 'roi' || currentInput.results_focus === 'both' || !currentInput.results_focus) && (
                         <Select label="ROI (Bucket)" value={currentInput.roi_bucket} onChange={v => handleChange('roi_bucket', v)} options={[
                         {label: 'ROI > 3 (Excelente)', value: 'roi_lt_3'},
                         {label: 'ROI ~ 3 (Bom)', value: 'roi_3'},

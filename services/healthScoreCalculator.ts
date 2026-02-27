@@ -88,30 +88,53 @@ export const calculateHealthScore = (input: HealthInput, clientConfig: ClientCon
   
   // ROI Score Calculation
   let roiScore = 0;
-  // Determine ROI score based on LT
   let roiBaseScore = 0;
-  // Mapping ROI bucket to base values before LT adjustment
-  // Actually, the previous logic had LT built into the map. Let's reuse that but we need to know the "max" points to redistribute.
-  // The PDF says: 
-  // - ROI Only: 25 pts
-  // - Social Only: 25 pts
-  // - Both: ROI 15 pts (60%), Social 10 pts (40%)
   
-  // Current implementation has hardcoded values in SCORES.v2.roi which sum up to roughly 15 pts for "Both" scenario?
-  // Let's check: roi_lt_3 is 15. growth is 5. engagement is 5. Total 25.
-  // So the current implementation assumes "Both" (15 ROI + 10 Social).
-  
-  // We need to adjust based on focus.
-  
-  // Calculate Raw ROI Component (Max 15 in current map)
-  let rawRoiComponent = 0;
-  if (ltMonths <= 2) {
-    rawRoiComponent = SCORES.v2.roi.lt_ate_2[input.roi_bucket];
-  } else if (ltMonths <= 6) {
-    rawRoiComponent = SCORES.v2.roi.lt_3_6[input.roi_bucket];
+  // Check if we can measure financial results
+  if (input.mensura_resultado_financeiro === 'nao') {
+      // Penalty: -15 points
+      // But wait, how does this fit into the "Focus" logic?
+      // If Focus is "Social Only", ROI shouldn't matter?
+      // The requirement says: "Se não, deve ser gerado uma penalidade... e a pergunta do 'quanto' de ROI, nem aparece."
+      // Assuming this penalty applies regardless of focus if the user explicitly says "No".
+      // However, if Focus is "Social Only", maybe we shouldn't ask this?
+      // But let's assume if they answer "No", it's -15.
+      // And since it's a penalty, it might override the weighted score or be part of it.
+      // Let's treat it as the "Raw ROI Component" being -15 (scaled if necessary).
+      
+      // Actually, -15 is the worst possible score in the LT > 6 table for "Sangria".
+      // So let's set the raw component to -9 (which scales to -15 in 100% ROI focus? No.)
+      // Let's look at the weights.
+      // If Focus = ROI (25 pts max). Base 15 -> 25 (x1.66).
+      // If we want the final deduction to be -15 points from the TOTAL score (100 scale)?
+      // Or -15 from the Vertical Score (25 scale)?
+      // The doc says "-15". Usually means raw points in the vertical.
+      
+      // Let's assume rawRoiComponent = -9. 
+      // If Focus = Both (x1): -9.
+      // If Focus = ROI (x1.66): -15.
+      // If Focus = Social... well, if Social Only, we usually ignore ROI.
+      // But if they explicitly say "We can't measure", maybe it's bad even for Social focus?
+      // Let's assume if Focus == Social, we ignore this.
+      
+      // BUT, the prompt says "Se não, deve ser gerado uma penalidade".
+      // Let's assume rawRoiComponent = -9 (which is roughly -15 scaled up or just a bad score).
+      // Actually, looking at the table: "Sim = ..., Não = -15".
+      // This looks like a direct score assignment.
+      
+      roiBaseScore = -15; // This seems to be the "Score" for this answer.
   } else {
-    rawRoiComponent = SCORES.v2.roi.lt_gt_6[input.roi_bucket];
+      // Determine ROI score based on LT
+      if (ltMonths <= 2) {
+        roiBaseScore = SCORES.v2.roi.lt_ate_2[input.roi_bucket];
+      } else if (ltMonths <= 6) {
+        roiBaseScore = SCORES.v2.roi.lt_3_6[input.roi_bucket];
+      } else {
+        roiBaseScore = SCORES.v2.roi.lt_gt_6[input.roi_bucket];
+      }
   }
+
+  let rawRoiComponent = roiBaseScore;
 
   // Calculate Raw Social Component (Max 10 in current map)
   let rawSocialComponent = SCORES.v2.growth[input.growth] + SCORES.v2.engagement[input.engagement_vs_avg];
