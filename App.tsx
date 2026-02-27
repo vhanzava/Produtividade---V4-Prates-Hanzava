@@ -136,15 +136,17 @@ const App: React.FC = () => {
               updated_at: new Date().toISOString()
           };
 
+          console.log("Saving payload to Supabase:", payload);
+
           const { error } = await supabase
             .from('health_inputs')
-            .upsert(payload, { onConflict: 'client_id, month_key' });
+            .upsert(payload, { onConflict: 'client_id,month_key' });
 
           if (error) throw error;
           setStatusMsg("Avaliação salva na nuvem!");
       } catch (err: any) {
           console.error("Erro ao salvar health input:", err);
-          setStatusMsg("Erro ao salvar avaliação na nuvem.");
+          setStatusMsg(`Erro ao salvar: ${err.message || 'Erro desconhecido'}`);
       } finally {
           setTimeout(() => setStatusMsg(null), 3000);
       }

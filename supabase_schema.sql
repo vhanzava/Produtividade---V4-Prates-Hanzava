@@ -81,10 +81,11 @@ ALTER TABLE health_inputs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_state ENABLE ROW LEVEL SECURITY;
 
 -- Policies (Adjust as needed for your auth setup)
--- Allow all access for authenticated users for simplicity in this context, 
--- or restrict based on user_id if you have auth.uid() mapping.
--- Here we assume a simple "allow all" for authenticated users to start.
+-- Drop existing policies to avoid "policy already exists" errors
+DROP POLICY IF EXISTS "Enable all access for authenticated users" ON health_inputs;
+DROP POLICY IF EXISTS "Enable all access for authenticated users" ON app_state;
 
+-- Re-create policies
 CREATE POLICY "Enable all access for authenticated users" ON health_inputs
     FOR ALL USING (auth.role() = 'authenticated');
 
