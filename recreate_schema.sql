@@ -40,6 +40,8 @@ CREATE TABLE health_inputs (
     -- Metadata & New Features
     results_focus TEXT DEFAULT 'both',
     social_profile TEXT,
+    espera_resultado_mensuravel TEXT DEFAULT 'sim',
+    mensura_resultado_financeiro TEXT DEFAULT 'sim',
     
     -- Timestamps
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

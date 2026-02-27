@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { EmployeeConfig, ClientConfig, DepartmentType, ClientCategory } from '../types';
-import { Save, User, Briefcase, Plus, Archive, RefreshCw, Calendar, FileText, Loader, Upload } from 'lucide-react';
+import { Save, User, Briefcase, Plus, Archive, RefreshCw, Calendar, FileText, Loader, Upload, UserX } from 'lucide-react';
 import { extractContractData } from '../services/contractParser';
 
 interface SettingsProps {
@@ -398,8 +398,8 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                 />
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${client.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                                    {client.isActive ? 'Ativo' : 'Inativo'}
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${client.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                    {client.isActive ? 'Ativo' : 'Churned'}
                                 </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{client.name}</td>
@@ -444,10 +444,10 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <button
                                     onClick={() => handleClientChange(realIndex, 'isActive', !client.isActive)}
-                                    className={`text-sm flex items-center gap-1 ml-auto ${client.isActive ? 'text-gray-500 hover:text-gray-700' : 'text-green-600 hover:text-green-800'}`}
-                                    title={client.isActive ? "Arquivar Cliente" : "Restaurar Cliente"}
+                                    className={`text-sm flex items-center gap-1 ml-auto ${client.isActive ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'}`}
+                                    title={client.isActive ? "Dar Churn (Desativar)" : "Reativar Cliente"}
                                 >
-                                    {client.isActive ? <Archive size={16} /> : <RefreshCw size={16} />}
+                                    {client.isActive ? <UserX size={16} /> : <RefreshCw size={16} />}
                                 </button>
                             </td>
                         </tr>

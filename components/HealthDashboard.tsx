@@ -737,29 +737,55 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
                 <div className="space-y-6 animate-fade-in">
                   <h4 className="text-lg font-bold text-green-800 border-b border-green-100 pb-2 mb-4">Resultados</h4>
                   
+                  {/* Step 1: Does the client expect measurable results? */}
                   <div className="bg-green-50 p-4 rounded-lg border border-green-100 mb-6">
-                    <Select label="Foco de Resultados (Objetivo do Cliente)" value={currentInput.results_focus || 'both'} onChange={v => handleChange('results_focus', v)} options={[
-                      {label: 'Ambos (ROI + Social)', value: 'both'},
-                      {label: 'Apenas ROI', value: 'roi'},
-                      {label: 'Apenas Social', value: 'social'}
-                    ]} />
-                    <p className="text-xs text-green-700 mt-2">
-                      * Define como os 25 pontos da vertical são distribuídos.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-6">
-                    <div className="bg-green-50 p-4 rounded-lg border border-green-100">
-                        <Select label="Conseguimos mensurar resultado financeiro (faturamento)?" value={currentInput.mensura_resultado_financeiro || 'sim'} onChange={v => handleChange('mensura_resultado_financeiro', v)} options={[
+                    <Select 
+                        label="O cliente espera algum resultado mensurável?" 
+                        value={currentInput.espera_resultado_mensuravel || 'sim'} 
+                        onChange={v => handleChange('espera_resultado_mensuravel', v)} 
+                        options={[
                           {label: 'Sim', value: 'sim'},
                           {label: 'Não', value: 'nao'}
-                        ]} />
-                        {currentInput.mensura_resultado_financeiro === 'nao' && (
-                            <p className="text-xs text-red-600 mt-2 font-bold">
-                                * Penalidade de -15 pontos aplicada.
+                        ]} 
+                    />
+                    {currentInput.espera_resultado_mensuravel === 'nao' && (
+                        <p className="text-xs text-orange-600 mt-2 font-bold">
+                            * Pontuação desta vertical será zerada e redistribuída para as outras verticais.
+                        </p>
+                    )}
+                  </div>
+
+                  {/* Only show the rest if YES */}
+                  {(currentInput.espera_resultado_mensuravel !== 'nao') && (
+                    <>
+                        <div className="bg-green-50 p-4 rounded-lg border border-green-100 mb-6">
+                            <Select label="Foco de Resultados (Objetivo do Cliente)" value={currentInput.results_focus || 'both'} onChange={v => handleChange('results_focus', v)} options={[
+                            {label: 'Ambos (ROI + Social)', value: 'both'},
+                            {label: 'Apenas ROI', value: 'roi'},
+                            {label: 'Apenas Social', value: 'social'}
+                            ]} />
+                            <p className="text-xs text-green-700 mt-2">
+                            * Define como os 25 pontos da vertical são distribuídos.
                             </p>
-                        )}
-                    </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 gap-6">
+                            {/* Hide this question if focus is purely SOCIAL */}
+                            {currentInput.results_focus !== 'social' && (
+                                <div className="bg-green-50 p-4 rounded-lg border border-green-100">
+                                    <Select label="Conseguimos mensurar resultado financeiro (faturamento)?" value={currentInput.mensura_resultado_financeiro || 'sim'} onChange={v => handleChange('mensura_resultado_financeiro', v)} options={[
+                                    {label: 'Sim', value: 'sim'},
+                                    {label: 'Não', value: 'nao'}
+                                    ]} />
+                                    {currentInput.mensura_resultado_financeiro === 'nao' && (
+                                        <p className="text-xs text-red-600 mt-2 font-bold">
+                                            * Penalidade de -15 pontos aplicada.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                            
+                            
 
                     {(currentInput.mensura_resultado_financeiro !== 'nao') && (currentInput.results_focus === 'roi' || currentInput.results_focus === 'both' || !currentInput.results_focus) && (
                         <Select label="ROI (Bucket)" value={currentInput.roi_bucket} onChange={v => handleChange('roi_bucket', v)} options={[
@@ -843,8 +869,10 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
                         </>
                     )}
                   </div>
-                </div>
+                </>
               )}
+            </div>
+          )}
 
               {activeVerticalTab === 3 && (
                 <div className="space-y-6 animate-fade-in">

@@ -70,108 +70,120 @@ const getFlag = (score: number): { color: HealthFlagColor; action: string } => {
 
 export const calculateHealthScore = (input: HealthInput, clientConfig: ClientConfig): HealthScoreResult => {
   
+  // 0. Check if client expects measurable results
+  const expectsMeasurableResults = input.espera_resultado_mensuravel !== 'nao';
+
   // 1. Vertical 1: Engajamento
   let v1Raw = 0;
-  v1Raw += SCORES.v1.checkin[input.checkin];
-  v1Raw += SCORES.v1.whatsapp[input.whatsapp];
-  v1Raw += SCORES.v1.adimplencia[input.adimplencia];
-  v1Raw += SCORES.v1.recarga[input.recarga];
+  v1Raw += SCORES.v1.checkin[input.checkin] || 0;
+  v1Raw += SCORES.v1.whatsapp[input.whatsapp] || 0;
+  v1Raw += SCORES.v1.adimplencia[input.adimplencia] || 0;
+  v1Raw += SCORES.v1.recarga[input.recarga] || 0;
   
-  const v1Final = v1Raw * WEIGHTS.vertical_1.multiplier;
-
   // 2. Vertical 2: Resultados
-  let v2Raw = 0;
-  const ltMonths = calculateLifetimeMonths(clientConfig.contractStartDate);
-  
-  // Determine Focus Weights
-  const focus = input.results_focus || 'both'; // Default to both if undefined
-  
-  // ROI Score Calculation
-  let roiScore = 0;
-  let roiBaseScore = 0;
-  
-  // Check if we can measure financial results
-  if (input.mensura_resultado_financeiro === 'nao') {
-      // Penalty: -15 points
-      // But wait, how does this fit into the "Focus" logic?
-      // If Focus is "Social Only", ROI shouldn't matter?
-      // The requirement says: "Se não, deve ser gerado uma penalidade... e a pergunta do 'quanto' de ROI, nem aparece."
-      // Assuming this penalty applies regardless of focus if the user explicitly says "No".
-      // However, if Focus is "Social Only", maybe we shouldn't ask this?
-      // But let's assume if they answer "No", it's -15.
-      // And since it's a penalty, it might override the weighted score or be part of it.
-      // Let's treat it as the "Raw ROI Component" being -15 (scaled if necessary).
+  let v2Final = 0;
+
+  if (expectsMeasurableResults) {
+      let v2Raw = 0;
+      const ltMonths = calculateLifetimeMonths(clientConfig.contractStartDate);
       
-      // Actually, -15 is the worst possible score in the LT > 6 table for "Sangria".
-      // So let's set the raw component to -9 (which scales to -15 in 100% ROI focus? No.)
-      // Let's look at the weights.
-      // If Focus = ROI (25 pts max). Base 15 -> 25 (x1.66).
-      // If we want the final deduction to be -15 points from the TOTAL score (100 scale)?
-      // Or -15 from the Vertical Score (25 scale)?
-      // The doc says "-15". Usually means raw points in the vertical.
+      // Determine Focus Weights
+      const focus = input.results_focus || 'both'; // Default to both if undefined
       
-      // Let's assume rawRoiComponent = -9. 
-      // If Focus = Both (x1): -9.
-      // If Focus = ROI (x1.66): -15.
-      // If Focus = Social... well, if Social Only, we usually ignore ROI.
-      // But if they explicitly say "We can't measure", maybe it's bad even for Social focus?
-      // Let's assume if Focus == Social, we ignore this.
+      // ROI Score Calculation
+      let roiScore = 0;
+      let roiBaseScore = 0;
       
-      // BUT, the prompt says "Se não, deve ser gerado uma penalidade".
-      // Let's assume rawRoiComponent = -9 (which is roughly -15 scaled up or just a bad score).
-      // Actually, looking at the table: "Sim = ..., Não = -15".
-      // This looks like a direct score assignment.
-      
-      roiBaseScore = -15; // This seems to be the "Score" for this answer.
-  } else {
-      // Determine ROI score based on LT
-      if (ltMonths <= 2) {
-        roiBaseScore = SCORES.v2.roi.lt_ate_2[input.roi_bucket];
-      } else if (ltMonths <= 6) {
-        roiBaseScore = SCORES.v2.roi.lt_3_6[input.roi_bucket];
+      // Check if we can measure financial results
+      if (input.mensura_resultado_financeiro === 'nao') {
+          // Penalty: -15 points (Applied as raw score for ROI component)
+          roiBaseScore = -15; 
       } else {
-        roiBaseScore = SCORES.v2.roi.lt_gt_6[input.roi_bucket];
+          // Determine ROI score based on LT
+          const bucket = input.roi_bucket || 'roi_3'; // Default to middle if missing
+          if (ltMonths <= 2) {
+            roiBaseScore = SCORES.v2.roi.lt_ate_2[bucket] || 0;
+          } else if (ltMonths <= 6) {
+            roiBaseScore = SCORES.v2.roi.lt_3_6[bucket] || 0;
+          } else {
+            roiBaseScore = SCORES.v2.roi.lt_gt_6[bucket] || 0;
+          }
       }
-  }
-
-  let rawRoiComponent = roiBaseScore;
-
-  // Calculate Raw Social Component (Max 10 in current map)
-  let rawSocialComponent = SCORES.v2.growth[input.growth] + SCORES.v2.engagement[input.engagement_vs_avg];
-
-  if (focus === 'roi') {
-    // ROI Only: ROI is 25 pts (100%). Social is 0.
-    // Scale ROI from 15 base to 25. (x 1.66)
-    v2Raw = rawRoiComponent * (25/15);
-  } else if (focus === 'social') {
-    // Social Only: Social is 25 pts (100%). ROI is 0.
-    // Scale Social from 10 base to 25. (x 2.5)
-    v2Raw = rawSocialComponent * (2.5);
+    
+      let rawRoiComponent = roiBaseScore;
+    
+      // Calculate Raw Social Component (Max 10 in current map)
+      const growthScore = SCORES.v2.growth[input.growth] || 0;
+      const engagementScore = SCORES.v2.engagement[input.engagement_vs_avg] || 0;
+      let rawSocialComponent = growthScore + engagementScore;
+    
+      if (focus === 'roi') {
+        // ROI Only: ROI is 25 pts (100%). Social is 0.
+        // Scale ROI from 15 base to 25. (x 1.66)
+        v2Raw = rawRoiComponent * (25/15);
+      } else if (focus === 'social') {
+        // Social Only: Social is 25 pts (100%). ROI is 0.
+        // Scale Social from 10 base to 25. (x 2.5)
+        v2Raw = rawSocialComponent * (2.5);
+      } else {
+        // Both: ROI 15 pts, Social 10 pts. (Default)
+        // If mensura_resultado_financeiro is 'nao', roiBaseScore is -15.
+        // So v2Raw = -15 + social.
+        v2Raw = rawRoiComponent + rawSocialComponent;
+      }
+    
+      v2Final = v2Raw * WEIGHTS.vertical_2.multiplier;
   } else {
-    // Both: ROI 15 pts, Social 10 pts. (Default)
-    v2Raw = rawRoiComponent + rawSocialComponent;
+      // If client does NOT expect measurable results, score is 0.
+      v2Final = 0;
   }
-
-  const v2Final = v2Raw * WEIGHTS.vertical_2.multiplier;
 
   // 3. Vertical 3: Relacionamento
   let v3Raw = 0;
-  v3Raw += SCORES.v3.checkin_produtivo[input.checkin_produtivo];
-  v3Raw += SCORES.v3.progresso[input.progresso];
-  v3Raw += SCORES.v3.relacionamento_interno[input.relacionamento_interno];
-  v3Raw += SCORES.v3.aviso_previo[input.aviso_previo];
-  v3Raw += SCORES.v3.pesquisa_respondida[input.pesquisa_respondida];
-
-  const v3Final = v3Raw * WEIGHTS.vertical_3.multiplier;
+  v3Raw += SCORES.v3.checkin_produtivo[input.checkin_produtivo] || 0;
+  v3Raw += SCORES.v3.progresso[input.progresso] || 0;
+  v3Raw += SCORES.v3.relacionamento_interno[input.relacionamento_interno] || 0;
+  v3Raw += SCORES.v3.aviso_previo[input.aviso_previo] || 0;
+  v3Raw += SCORES.v3.pesquisa_respondida[input.pesquisa_respondida] || 0;
 
   // 4. Vertical 4: Pesquisas
   let v4Raw = 0;
-  v4Raw += SCORES.v4.csat[input.csat_tecnico];
-  v4Raw += SCORES.v4.nps[input.nps];
-  v4Raw += SCORES.v4.mhs[input.mhs];
-  v4Raw += SCORES.v4.pesquisa_geral[input.pesquisa_geral_respondida];
+  v4Raw += SCORES.v4.csat[input.csat_tecnico] || 0;
+  v4Raw += SCORES.v4.nps[input.nps] || 0;
+  v4Raw += SCORES.v4.mhs[input.mhs] || 0;
+  v4Raw += SCORES.v4.pesquisa_geral[input.pesquisa_geral_respondida] || 0;
 
-  const v4Final = v4Raw * WEIGHTS.vertical_4.multiplier;
+  // Apply Multipliers based on Expectation
+  let v1Final, v3Final, v4Final;
+
+  if (expectsMeasurableResults) {
+      // Standard Multipliers
+      v1Final = v1Raw * WEIGHTS.vertical_1.multiplier; // 1.4
+      v3Final = v3Raw * WEIGHTS.vertical_3.multiplier; // 1.0
+      v4Final = v4Raw * WEIGHTS.vertical_4.multiplier; // 0.6
+  } else {
+      // Redistributed Multipliers (Total 100 pts distributed to v1, v3, v4)
+      // v1 (Engagement): Base 25 -> Target 35 (x1.4) -> Wait, standard is 35.
+      // Let's re-calculate standard total:
+      // v1: 25 * 1.4 = 35
+      // v2: 25 * 1.0 = 25
+      // v3: 25 * 1.0 = 25
+      // v4: 25 * 0.6 = 15
+      // Total = 100.
+      
+      // New Distribution (v2 = 0):
+      // We have 25 points from v2 to distribute.
+      // User: "Relacionamento receberá mais pontos que Pesquisa".
+      // Let's add:
+      // v3 (Relationship): +15 points -> Target 40. (Multiplier 1.6)
+      // v1 (Engagement): +5 points -> Target 40. (Multiplier 1.6)
+      // v4 (Surveys): +5 points -> Target 20. (Multiplier 0.8)
+      // Total: 40 + 0 + 40 + 20 = 100.
+      
+      v1Final = v1Raw * 1.6;
+      v3Final = v3Raw * 1.6;
+      v4Final = v4Raw * 0.8;
+  }
 
   // Total
   const totalScore = Math.max(0, Math.min(100, v1Final + v2Final + v3Final + v4Final));

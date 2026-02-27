@@ -143,6 +143,7 @@ export interface HealthInput {
   
   // Metadata
   results_focus: 'roi' | 'social' | 'both';
+  espera_resultado_mensuravel?: 'sim' | 'nao';
   mensura_resultado_financeiro?: 'sim' | 'nao';
   social_profile?: 'A' | 'B'; // A (<50k), B (>50k)
   last_updated_engagement?: string;
