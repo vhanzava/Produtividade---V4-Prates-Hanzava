@@ -79,6 +79,7 @@ const App: React.FC = () => {
                       
                       // Metadata
                       results_focus: row.results_focus,
+                      social_profile: row.social_profile,
                       last_updated_engagement: row.last_updated_engagement,
                       last_updated_results: row.last_updated_results,
                       last_updated_relationship: row.last_updated_relationship,
@@ -126,6 +127,7 @@ const App: React.FC = () => {
               
               // Metadata
               results_focus: input.results_focus,
+              social_profile: input.social_profile,
               last_updated_engagement: input.last_updated_engagement,
               last_updated_results: input.last_updated_results,
               last_updated_relationship: input.last_updated_relationship,

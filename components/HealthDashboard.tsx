@@ -219,9 +219,67 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
 
       {/* HOME VIEW */}
       {view === 'home' && !isEditing && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Reminders Card */}
-          <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="space-y-6">
+            {/* Global Alert - Data Blackout */}
+            {reminders.length > 0 && (
+                <div className={`rounded-lg p-4 border flex items-start gap-3 ${
+                    reminders.length > activeClients.length * 0.5 
+                    ? 'bg-red-50 border-red-200 text-red-800' 
+                    : 'bg-orange-50 border-orange-200 text-orange-800'
+                }`}>
+                    <AlertTriangle className={`shrink-0 ${reminders.length > activeClients.length * 0.5 ? 'text-red-600' : 'text-orange-600'}`} />
+                    <div>
+                        <h3 className="font-bold text-lg">
+                            {reminders.length > activeClients.length * 0.5 ? 'CRÍTICO: Apagão de Dados Detectado' : 'Atenção: Dados Desatualizados'}
+                        </h3>
+                        <p className="text-sm mt-1 opacity-90">
+                            {reminders.length > activeClients.length * 0.5 
+                                ? `Mais de 50% da carteira (${reminders.length} pendências) está com dados desatualizados. O Health Score não reflete a realidade.`
+                                : `Existem ${reminders.length} atualizações pendentes. Mantenha os dados em dia para evitar distorções no score.`
+                            }
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Vertical Performance */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
+                    <Activity className="text-purple-600" />
+                    Média por Vertical
+                </h3>
+                <div className="space-y-4">
+                    {[
+                        { key: 'engagement', label: 'Engajamento', color: 'blue', max: 35 },
+                        { key: 'results', label: 'Resultados', color: 'green', max: 25 },
+                        { key: 'relationship', label: 'Relacionamento', color: 'purple', max: 25 },
+                        { key: 'surveys', label: 'Pesquisas', color: 'orange', max: 15 }
+                    ].map(v => {
+                        const total = Object.values(scores).reduce((sum, s) => sum + (s.breakdown[v.key as keyof typeof s.breakdown] || 0), 0);
+                        const avg = activeClients.length ? total / activeClients.length : 0;
+                        const percent = (avg / v.max) * 100;
+                        
+                        return (
+                            <div key={v.key}>
+                                <div className="flex justify-between text-sm mb-1">
+                                    <span className="text-gray-600">{v.label}</span>
+                                    <span className="font-bold text-gray-900">{avg.toFixed(1)} / {v.max}</span>
+                                </div>
+                                <div className="w-full bg-gray-100 rounded-full h-2">
+                                    <div 
+                                        className={`h-2 rounded-full bg-${v.color}-500`} 
+                                        style={{ width: `${percent}%` }}
+                                    ></div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+              </div>
+
+              {/* Reminders Card */}
+              <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <Clock className="text-orange-500" />
@@ -375,6 +433,7 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
               </div>
           </div>
         </div>
+      </div>
       )}
 
       {/* LIST VIEW */}
