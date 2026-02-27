@@ -2,10 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { ClientConfig, HealthInput, HealthScoreResult, HealthFlagColor } from '../types';
 import { calculateHealthScore } from '../services/healthScoreCalculator';
 import { AlertTriangle, CheckCircle, XCircle, Activity, Save, ChevronRight, Clock, Calendar, LayoutGrid, List, DollarSign, Users } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface HealthDashboardProps {
   clients: ClientConfig[];
   savedInputs: Record<string, HealthInput>;
+  allHealthInputs?: HealthInput[]; // Optional for backward compatibility if needed, but we'll pass it
   onSaveInput: (input: HealthInput) => void;
   canEdit: boolean;
 }
@@ -30,14 +32,86 @@ const INITIAL_INPUT: Omit<HealthInput, 'clientId' | 'monthKey'> = {
   results_focus: 'both'
 };
 
-const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs, onSaveInput, canEdit }) => {
-  const [view, setView] = useState<'home' | 'list'>('home');
+const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs, allHealthInputs = [], onSaveInput, canEdit }) => {
+  const [view, setView] = useState<'home' | 'list' | 'evolution'>('home');
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
+  const [timeRange, setTimeRange] = useState<number>(6);
   const [isEditing, setIsEditing] = useState(false);
   const [currentInput, setCurrentInput] = useState<HealthInput | null>(null);
   const [activeVerticalTab, setActiveVerticalTab] = useState<number>(1);
 
   const activeClients = useMemo(() => clients.filter(c => c.isActive && c.category === 'Executar'), [clients]);
+
+  const evolutionData = useMemo(() => {
+    // 1. Filter inputs
+    let inputs = allHealthInputs;
+    
+    if (selectedClient && view === 'evolution') {
+        inputs = inputs.filter(i => i.clientId === selectedClient);
+    } else {
+        // Only consider active clients for the average
+        const activeClientNames = activeClients.map(c => c.name);
+        inputs = inputs.filter(i => activeClientNames.includes(i.clientId));
+    }
+
+    // 2. Group by month
+    const groupedByMonth: Record<string, HealthInput[]> = {};
+    inputs.forEach(input => {
+        if (!groupedByMonth[input.monthKey]) {
+            groupedByMonth[input.monthKey] = [];
+        }
+        groupedByMonth[input.monthKey].push(input);
+    });
+
+    // 3. Calculate averages
+    const data = Object.keys(groupedByMonth).sort().map(monthKey => {
+        const monthInputs = groupedByMonth[monthKey];
+        let totalScore = 0;
+        let totalEng = 0;
+        let totalRes = 0;
+        let totalRel = 0;
+        let totalSurv = 0;
+        let count = 0;
+
+        monthInputs.forEach(input => {
+            const clientConfig = clients.find(c => c.name === input.clientId);
+            if (clientConfig) {
+                const result = calculateHealthScore(input, clientConfig);
+                totalScore += result.score;
+                totalEng += result.breakdown.engagement;
+                totalRes += result.breakdown.results;
+                totalRel += result.breakdown.relationship;
+                totalSurv += result.breakdown.surveys;
+                count++;
+            }
+        });
+
+        if (count === 0) return null;
+
+        // Format month key (YYYY-MM) to readable (MMM/YY)
+        const [year, month] = monthKey.split('-');
+        const date = new Date(parseInt(year), parseInt(month) - 1);
+        const monthName = date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+        const formattedMonth = `${monthName}/${year.slice(2)}`;
+
+        return {
+            monthKey, // for sorting/filtering
+            month: formattedMonth,
+            score: Number((totalScore / count).toFixed(1)),
+            engagement: Number((totalEng / count).toFixed(1)),
+            results: Number((totalRes / count).toFixed(1)),
+            relationship: Number((totalRel / count).toFixed(1)),
+            surveys: Number((totalSurv / count).toFixed(1))
+        };
+    }).filter(item => item !== null) as any[];
+
+    // 4. Filter by time range
+    if (timeRange > 0) {
+        return data.slice(-timeRange);
+    }
+    return data;
+
+  }, [allHealthInputs, selectedClient, activeClients, clients, timeRange, view]);
 
   const scores = useMemo(() => {
     const map: Record<string, HealthScoreResult> = {};
@@ -206,6 +280,12 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
               className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-all ${view === 'list' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
             >
               <List size={16} /> Lista de Clientes
+            </button>
+            <button 
+              onClick={() => { setView('evolution'); setSelectedClient(null); }}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-all ${view === 'evolution' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <Activity size={16} /> Evolução
             </button>
           </div>
         </div>
@@ -434,6 +514,82 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
           </div>
         </div>
       </div>
+      )}
+
+      {/* EVOLUTION VIEW */}
+      {view === 'evolution' && !isEditing && (
+        <div className="space-y-6">
+            {/* Filters */}
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-wrap gap-4 items-center">
+                <div className="flex items-center gap-2">
+                    <Users size={18} className="text-gray-500" />
+                    <select 
+                        className="border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 p-2"
+                        value={selectedClient || ''}
+                        onChange={(e) => setSelectedClient(e.target.value || null)}
+                    >
+                        <option value="">Média da Carteira (Todos)</option>
+                        {activeClients.map(c => (
+                            <option key={c.name} value={c.name}>{c.name}</option>
+                        ))}
+                    </select>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                    <Clock size={18} className="text-gray-500" />
+                    <select 
+                        className="border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 p-2"
+                        value={timeRange}
+                        onChange={(e) => setTimeRange(Number(e.target.value))}
+                    >
+                        <option value={3}>Últimos 3 meses</option>
+                        <option value={6}>Últimos 6 meses</option>
+                        <option value={12}>Últimos 12 meses</option>
+                        <option value={0}>Todo o período</option>
+                    </select>
+                </div>
+            </div>
+
+            {/* Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Overall Score Evolution */}
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">Evolução do Health Score</h3>
+                    <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={evolutionData}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                <XAxis dataKey="month" tick={{fontSize: 12}} />
+                                <YAxis domain={[0, 100]} tick={{fontSize: 12}} />
+                                <Tooltip />
+                                <Legend />
+                                <Line type="monotone" dataKey="score" name="Score Geral" stroke="#2563EB" strokeWidth={3} dot={{r: 4}} activeDot={{r: 6}} />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* Vertical Breakdown */}
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">Evolução por Vertical</h3>
+                    <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={evolutionData}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                <XAxis dataKey="month" tick={{fontSize: 12}} />
+                                <YAxis domain={[0, 100]} tick={{fontSize: 12}} />
+                                <Tooltip />
+                                <Legend />
+                                <Line type="monotone" dataKey="engagement" name="Engajamento" stroke="#1E40AF" strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="results" name="Resultados" stroke="#059669" strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="relationship" name="Relacionamento" stroke="#7C3AED" strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="surveys" name="Pesquisas" stroke="#D97706" strokeWidth={2} dot={false} />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            </div>
+        </div>
       )}
 
       {/* LIST VIEW */}

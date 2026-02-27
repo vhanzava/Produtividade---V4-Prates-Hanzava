@@ -20,6 +20,7 @@ const App: React.FC = () => {
   const [employees, setEmployees] = useState<EmployeeConfig[]>([]);
   const [clients, setClients] = useState<ClientConfig[]>([]);
   const [healthInputs, setHealthInputs] = useState<Record<string, HealthInput>>({});
+  const [allHealthInputs, setAllHealthInputs] = useState<HealthInput[]>([]);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'health' | 'settings'>('dashboard');
   const [currentModule, setCurrentModule] = useState<'none' | 'productivity' | 'health'>('none');
   
@@ -50,42 +51,43 @@ const App: React.FC = () => {
 
   const fetchHealthInputs = async () => {
       try {
-          const { data, error } = await supabase.from('health_inputs').select('*');
+          const { data, error } = await supabase.from('health_inputs').select('*').order('month_key', { ascending: true });
           if (error) throw error;
           if (data) {
+              const allInputs: HealthInput[] = data.map((row: any) => ({
+                  clientId: row.client_id,
+                  monthKey: row.month_key,
+                  checkin: row.checkin,
+                  whatsapp: row.whatsapp,
+                  adimplencia: row.adimplencia,
+                  recarga: row.recarga,
+                  roi_bucket: row.roi_bucket,
+                  growth: row.growth,
+                  engagement_vs_avg: row.engagement_vs_avg,
+                  checkin_produtivo: row.checkin_produtivo,
+                  progresso: row.progresso,
+                  relacionamento_interno: row.relacionamento_interno,
+                  aviso_previo: row.aviso_previo,
+                  pesquisa_respondida: row.pesquisa_respondida,
+                  csat_tecnico: row.csat_tecnico,
+                  nps: row.nps,
+                  mhs: row.mhs,
+                  pesquisa_geral_respondida: row.pesquisa_geral_respondida,
+                  results_focus: row.results_focus,
+                  social_profile: row.social_profile,
+                  last_updated_engagement: row.last_updated_engagement,
+                  last_updated_results: row.last_updated_results,
+                  last_updated_relationship: row.last_updated_relationship,
+                  last_updated_surveys: row.last_updated_surveys,
+                  lastUpdated: row.last_updated || row.updated_at
+              }));
+
+              setAllHealthInputs(allInputs);
+
               const inputs: Record<string, HealthInput> = {};
-              data.forEach((row: any) => {
-                  // Assuming row has all fields or a data json column. 
-                  // If row is flat:
-                  inputs[row.clientId || row.client_id] = {
-                      clientId: row.clientId || row.client_id,
-                      monthKey: row.monthKey || row.month_key,
-                      checkin: row.checkin,
-                      whatsapp: row.whatsapp,
-                      adimplencia: row.adimplencia,
-                      recarga: row.recarga,
-                      roi_bucket: row.roi_bucket,
-                      growth: row.growth,
-                      engagement_vs_avg: row.engagement_vs_avg,
-                      checkin_produtivo: row.checkin_produtivo,
-                      progresso: row.progresso,
-                      relacionamento_interno: row.relacionamento_interno,
-                      aviso_previo: row.aviso_previo,
-                      pesquisa_respondida: row.pesquisa_respondida,
-                      csat_tecnico: row.csat_tecnico,
-                      nps: row.nps,
-                      mhs: row.mhs,
-                      pesquisa_geral_respondida: row.pesquisa_geral_respondida,
-                      
-                      // Metadata
-                      results_focus: row.results_focus,
-                      social_profile: row.social_profile,
-                      last_updated_engagement: row.last_updated_engagement,
-                      last_updated_results: row.last_updated_results,
-                      last_updated_relationship: row.last_updated_relationship,
-                      last_updated_surveys: row.last_updated_surveys,
-                      lastUpdated: row.last_updated || row.lastUpdated
-                  };
+              // Since we ordered by month_key ascending, iterating through will overwrite with the latest
+              allInputs.forEach(input => {
+                  inputs[input.clientId] = input;
               });
               setHealthInputs(inputs);
           }
@@ -541,7 +543,7 @@ const App: React.FC = () => {
               )
             )
         ) : (
-            <HealthDashboard clients={clients} savedInputs={healthInputs} onSaveInput={saveHealthInput} canEdit={!!session?.isMaster} />
+            <HealthDashboard clients={clients} savedInputs={healthInputs} allHealthInputs={allHealthInputs} onSaveInput={saveHealthInput} canEdit={!!session?.isMaster} />
         )}
       </main>
     </div>
