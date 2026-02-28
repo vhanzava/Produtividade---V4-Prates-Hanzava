@@ -24,6 +24,8 @@ export interface EmployeeConfig {
   department: DepartmentType;
   defaultCost: number;
   defaultHours: number;
+  startDate?: string; // YYYY-MM-DD
+  endDate?: string;   // YYYY-MM-DD
   history: Record<string, MonthlyConfigEmp>; // key: "YYYY-MM"
 }
 

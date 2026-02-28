@@ -50,7 +50,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
     const newEmps = [...localEmps];
     const emp = newEmps[index];
     
-    if (field === 'department' || field === 'name') {
+    if (field === 'department' || field === 'name' || field === 'startDate' || field === 'endDate') {
         // @ts-ignore
         emp[field] = value;
     } else {
@@ -245,6 +245,8 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Departamento</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Início</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fim (Desligamento)</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Custo Mensal {selectedMonth !== 'default' && '(Exceção)'}
                   </th>
@@ -265,6 +267,22 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                         >
                             {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
                         </select>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <input
+                            type="date"
+                            className={INPUT_STYLE}
+                            value={emp.startDate || ''}
+                            onChange={(e) => handleEmpChange(idx, 'startDate', e.target.value)}
+                        />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <input
+                            type="date"
+                            className={INPUT_STYLE}
+                            value={emp.endDate || ''}
+                            onChange={(e) => handleEmpChange(idx, 'endDate', e.target.value)}
+                        />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <input

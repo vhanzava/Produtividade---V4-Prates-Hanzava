@@ -128,17 +128,28 @@ export const calculateSummary = (
   const end = endDateStr ? new Date(endDateStr + 'T00:00:00') : new Date();
   const activeMonths = startDateStr && endDateStr ? getMonthsInRange(start, end) : [];
 
-  const getProRataRatio = (monthKey: string): number => {
-    if (!startDateStr || !endDateStr) return 1;
+  const getProRataRatio = (monthKey: string, empStartStr?: string, empEndStr?: string): number => {
+    // Base filter range
+    let filterStart = new Date(start);
+    let filterEnd = new Date(end);
+    filterEnd.setHours(23, 59, 59, 999);
+
+    // Apply Employee Constraints
+    if (empStartStr) {
+        const empStart = new Date(empStartStr + 'T00:00:00');
+        if (empStart > filterStart) filterStart = empStart;
+    }
+    if (empEndStr) {
+        const empEnd = new Date(empEndStr + 'T23:59:59');
+        if (empEnd < filterEnd) filterEnd = empEnd;
+    }
+
+    if (!startDateStr && !endDateStr && !empStartStr && !empEndStr) return 1;
 
     const [y, m] = monthKey.split('-').map(Number);
     const monthStart = new Date(y, m - 1, 1);
     const monthEnd = new Date(y, m, 0); 
     monthEnd.setHours(23, 59, 59, 999);
-
-    const filterStart = new Date(start);
-    const filterEnd = new Date(end);
-    filterEnd.setHours(23, 59, 59, 999); 
 
     const effectiveStart = filterStart > monthStart ? filterStart : monthStart;
     const effectiveEnd = filterEnd < monthEnd ? filterEnd : monthEnd;
@@ -281,7 +292,7 @@ export const calculateSummary = (
           activeMonths.forEach(m => {
              const mConfig = config.history[m];
              const monthlyCap = mConfig ? mConfig.hours : config.defaultHours;
-             const ratio = getProRataRatio(m);
+             const ratio = getProRataRatio(m, config.startDate, config.endDate);
              totalCapacity += monthlyCap * ratio;
           });
       } else {
