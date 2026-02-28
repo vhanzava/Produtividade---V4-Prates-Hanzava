@@ -360,7 +360,6 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Setup (One-Time)
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                     </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -398,9 +397,14 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                 />
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${client.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                    {client.isActive ? 'Ativo' : 'Churned'}
-                                </span>
+                                <select
+                                    value={client.isActive ? 'true' : 'false'}
+                                    onChange={(e) => handleClientChange(realIndex, 'isActive', e.target.value === 'true')}
+                                    className={`block w-full pl-2 pr-8 py-1 text-xs font-medium border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md ${client.isActive ? 'text-green-800 bg-green-50 border-green-200' : 'text-red-800 bg-red-50 border-red-200'}`}
+                                >
+                                    <option value="true">Ativo</option>
+                                    <option value="false">Churned</option>
+                                </select>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{client.name}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -440,15 +444,6 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     onChange={(e) => handleClientChange(realIndex, 'oneTimeFee', e.target.value)}
                                     placeholder="0.00"
                                 />
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button
-                                    onClick={() => handleClientChange(realIndex, 'isActive', !client.isActive)}
-                                    className={`text-sm flex items-center gap-1 ml-auto ${client.isActive ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'}`}
-                                    title={client.isActive ? "Dar Churn (Desativar)" : "Reativar Cliente"}
-                                >
-                                    {client.isActive ? <UserX size={16} /> : <RefreshCw size={16} />}
-                                </button>
                             </td>
                         </tr>
                     )})}
