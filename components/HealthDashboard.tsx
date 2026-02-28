@@ -127,71 +127,162 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
   // Reminder Logic
   const reminders = useMemo(() => {
     const now = new Date();
-    const day = now.getDate();
-    const weekDay = now.getDay(); // 0 = Sunday, 5 = Friday
-    const month = now.getMonth(); // 0-11
-    
-    // Logic flags
-    const isFriday = weekDay === 5;
-    const isBiWeeklyWindow = (day >= 1 && day <= 5) || (day >= 15 && day <= 20);
-    const isQuarterlyMonth = [0, 3, 6, 9].includes(month); // Jan, Apr, Jul, Oct
+    now.setHours(0, 0, 0, 0); // Normalize to start of day
 
-    const pending: { client: ClientConfig, type: string, vertical: string }[] = [];
+    const pending: { 
+        client: ClientConfig, 
+        type: string, 
+        vertical: string, 
+        dueDate: Date,
+        status: 'overdue' | 'due_today' | 'future' 
+    }[] = [];
     
     activeClients.forEach(c => {
       const input = savedInputs[c.name];
+
+      // Helper to determine status
+      const checkStatus = (dueDate: Date) => {
+          dueDate.setHours(0, 0, 0, 0);
+          if (dueDate < now) return 'overdue';
+          if (dueDate.getTime() === now.getTime()) return 'due_today';
+          return 'future';
+      };
+
+      // 1. Initial Evaluation (If no input exists)
+      if (!input) {
+          pending.push({ 
+              client: c, 
+              type: 'Inicial', 
+              vertical: 'Avaliação Inicial (Todas as Verticais)', 
+              dueDate: now, // Due immediately
+              status: 'overdue'
+          });
+          return; // Skip other checks for this client
+      }
       
-      // Weekly: Engagement & Relationship (Every Friday)
-      if (isFriday) {
-        // Check if updated today
-        const lastEng = input?.last_updated_engagement ? new Date(input.last_updated_engagement) : null;
-        const lastRel = input?.last_updated_relationship ? new Date(input.last_updated_relationship) : null;
-        
-        const isEngUpdatedToday = lastEng && lastEng.toDateString() === now.toDateString();
-        const isRelUpdatedToday = lastRel && lastRel.toDateString() === now.toDateString();
+      // 2. Engagement & Relationship (Weekly - Friday)
+      // Logic: Due every Friday. 
+      // Next Due = Next Friday from last_updated.
+      // If last_updated is null (shouldn't happen if input exists, but safe check), due now.
+      
+      const checkWeekly = (lastDateStr: string | undefined, verticalName: string) => {
+          let nextDue = new Date();
+          if (lastDateStr) {
+              const lastDate = new Date(lastDateStr);
+              // Find the Friday of the week of lastDate
+              const lastDay = lastDate.getDay(); // 0-6
+              const diffToFriday = 5 - lastDay; // Friday is 5
+              const lastFriday = new Date(lastDate);
+              lastFriday.setDate(lastDate.getDate() + diffToFriday);
+              
+              // If updated before that Friday, it was for that week. Next due is next Friday.
+              // If updated ON or AFTER that Friday, it counts for that week. Next due is next Friday.
+              // Actually simpler: Just add 7 days to the "Due Date" of the previous cycle.
+              // But we don't store "Due Date". We store "Last Updated".
+              
+              // Let's project: Next Due is the *next upcoming Friday* after the last update.
+              // Example: Updated Mon 23rd. Next Friday is Fri 27th.
+              // Example: Updated Fri 27th. Next Friday is Fri 3rd.
+              
+              const nextFriday = new Date(lastDate);
+              nextFriday.setDate(lastDate.getDate() + ((7 - lastDate.getDay() + 5) % 7));
+              if (lastDate.getDay() === 5) {
+                  nextFriday.setDate(lastDate.getDate() + 7);
+              }
+              // If calculated nextFriday is same as lastDate (e.g. updated today Friday), move to next week
+              if (nextFriday.getTime() === lastDate.getTime()) {
+                  nextFriday.setDate(nextFriday.getDate() + 7);
+              }
+              nextDue = nextFriday;
+          } else {
+              // Never updated but input exists? Treat as due now.
+              nextDue = now;
+          }
+          
+          pending.push({
+              client: c,
+              type: 'Semanal',
+              vertical: verticalName,
+              dueDate: nextDue,
+              status: checkStatus(nextDue)
+          });
+      };
 
-        if (!isEngUpdatedToday) {
-          pending.push({ client: c, type: 'Semanal', vertical: 'Engajamento' });
-        }
-        if (!isRelUpdatedToday) {
-          pending.push({ client: c, type: 'Semanal', vertical: 'Relacionamento' });
-        }
-      }
+      checkWeekly(input.last_updated_engagement, 'Engajamento');
+      checkWeekly(input.last_updated_relationship, 'Relacionamento');
 
-      // Bi-Weekly: Results (Days 1-5 and 15-20)
-      if (isBiWeeklyWindow) {
-        const lastRes = input?.last_updated_results ? new Date(input.last_updated_results) : null;
-        // Check if updated within current window
-        // Simple check: is last update in current month and within current window range?
-        // Actually, just check if updated in the last 5 days is a decent proxy, or strictly check window.
-        // Let's check if updated in the current window.
-        let isResUpdated = false;
-        if (lastRes) {
-            const lastDay = lastRes.getDate();
-            const lastMonth = lastRes.getMonth();
-            if (lastMonth === month) {
-                if (day <= 5 && lastDay >= 1 && lastDay <= 5) isResUpdated = true;
-                if (day >= 15 && day <= 20 && lastDay >= 15 && lastDay <= 20) isResUpdated = true;
-            }
-        }
-        
-        if (!isResUpdated) {
-          pending.push({ client: c, type: 'Quinzenal', vertical: 'Resultados' });
-        }
-      }
 
-      // Quarterly: Surveys (Jan, Apr, Jul, Oct)
-      if (isQuarterlyMonth) {
-        const lastSurv = input?.last_updated_surveys ? new Date(input.last_updated_surveys) : null;
-        // Check if updated in current month
-        const isSurvUpdated = lastSurv && lastSurv.getMonth() === month && lastSurv.getFullYear() === now.getFullYear();
-        
-        if (!isSurvUpdated) {
-             pending.push({ client: c, type: 'Trimestral', vertical: 'Pesquisas' });
-        }
-      }
+      // 3. Results (Bi-Weekly - 5th and 20th)
+      const checkBiWeekly = (lastDateStr: string | undefined, verticalName: string) => {
+          let nextDue = new Date();
+          if (lastDateStr) {
+              const lastDate = new Date(lastDateStr);
+              const day = lastDate.getDate();
+              const month = lastDate.getMonth();
+              const year = lastDate.getFullYear();
+              
+              // Windows: 1-5 and 15-20.
+              // If updated 1-5 -> Next due 20th same month.
+              // If updated 15-20 -> Next due 5th next month.
+              // If updated outside? 
+              //   If < 15 -> Next due 20th.
+              //   If > 20 -> Next due 5th next month.
+              
+              if (day <= 14) {
+                  // Due 20th of same month
+                  nextDue = new Date(year, month, 20);
+              } else {
+                  // Due 5th of next month
+                  nextDue = new Date(year, month + 1, 5);
+              }
+          } else {
+              nextDue = now;
+          }
+
+          pending.push({
+              client: c,
+              type: 'Quinzenal',
+              vertical: verticalName,
+              dueDate: nextDue,
+              status: checkStatus(nextDue)
+          });
+      };
+      
+      checkBiWeekly(input.last_updated_results, 'Resultados');
+
+      // 4. Surveys (Quarterly - Jan, Apr, Jul, Oct)
+      const checkQuarterly = (lastDateStr: string | undefined, verticalName: string) => {
+          let nextDue = new Date();
+          if (lastDateStr) {
+              const lastDate = new Date(lastDateStr);
+              const month = lastDate.getMonth(); // 0-11
+              const year = lastDate.getFullYear();
+              
+              // Quarters start at 0 (Jan), 3 (Apr), 6 (Jul), 9 (Oct)
+              // Find current quarter start month
+              const currentQuarterStart = Math.floor(month / 3) * 3;
+              
+              // Next due is the start of the NEXT quarter
+              nextDue = new Date(year, currentQuarterStart + 3, 1);
+          } else {
+              nextDue = now;
+          }
+
+          pending.push({
+              client: c,
+              type: 'Trimestral',
+              vertical: verticalName,
+              dueDate: nextDue,
+              status: checkStatus(nextDue)
+          });
+      };
+
+      checkQuarterly(input.last_updated_surveys, 'Pesquisas');
+
     });
-    return pending;
+    
+    // Sort by due date (asc) then by status priority
+    return pending.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
   }, [activeClients, savedInputs]);
 
   const handleEdit = (client: ClientConfig) => {
@@ -364,11 +455,16 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <Clock className="text-orange-500" />
-                Lembretes de Atualização
+                Status de Atualizações
               </h3>
-              <span className="bg-orange-100 text-orange-800 text-xs font-bold px-2 py-1 rounded-full">
-                {reminders.length} Pendentes
-              </span>
+              <div className="flex gap-2">
+                  <span className="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded-full">
+                    {reminders.filter(r => r.status === 'overdue').length} Atrasados
+                  </span>
+                  <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-2 py-1 rounded-full">
+                    {reminders.filter(r => r.status === 'due_today').length} Hoje
+                  </span>
+              </div>
             </div>
             
             {reminders.length === 0 ? (
@@ -379,12 +475,21 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
               </div>
             ) : (
               <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                {reminders.map((reminder, idx) => (
-                  <div key={`${reminder.client.name}-${reminder.vertical}-${idx}`} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
+                {reminders.map((reminder, idx) => {
+                    const isOverdue = reminder.status === 'overdue';
+                    const isDueToday = reminder.status === 'due_today';
+                    const statusColor = isOverdue ? 'bg-red-50 border-red-100' : isDueToday ? 'bg-yellow-50 border-yellow-100' : 'bg-gray-50 border-gray-100';
+                    const textColor = isOverdue ? 'text-red-800' : isDueToday ? 'text-yellow-800' : 'text-gray-800';
+                    
+                    return (
+                  <div key={`${reminder.client.name}-${reminder.vertical}-${idx}`} className={`flex items-center justify-between p-4 rounded-lg border ${statusColor} hover:opacity-90 transition-opacity`}>
                     <div>
-                      <h4 className="font-bold text-gray-900">Atualizar {reminder.vertical} - {reminder.client.name}</h4>
-                      <p className="text-xs text-gray-500">
-                        Ciclo: {reminder.type}
+                      <h4 className={`font-bold ${textColor}`}>
+                          {isOverdue && <AlertTriangle size={14} className="inline mr-1 text-red-600" />}
+                          Atualizar {reminder.vertical} - {reminder.client.name}
+                      </h4>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Ciclo: {reminder.type} • Vencimento: {reminder.dueDate.toLocaleDateString('pt-BR')}
                       </p>
                     </div>
                     <button 
@@ -394,7 +499,7 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
                       Atualizar <ChevronRight size={14} />
                     </button>
                   </div>
-                ))}
+                )})}
               </div>
             )}
           </div>
