@@ -1014,29 +1014,51 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
               {activeVerticalTab === 4 && (
                 <div className="space-y-6 animate-fade-in">
                   <h4 className="text-lg font-bold text-orange-800 border-b border-orange-100 pb-2 mb-4">Pesquisas</h4>
-                  <div className="grid grid-cols-1 gap-6">
-                    <Select label="CSAT Técnico" value={currentInput.csat_tecnico} onChange={v => handleChange('csat_tecnico', v)} options={[
-                      {label: '> 4.5', value: 'gt_4.5'},
-                      {label: 'Até 4', value: 'ate_4'},
-                      {label: 'Até 3.5', value: 'ate_3.5'},
-                      {label: '< 3', value: 'lt_3'}
-                    ]} />
-                    <Select label="NPS" value={currentInput.nps} onChange={v => handleChange('nps', v)} options={[
-                      {label: 'Promotor', value: 'promotor'},
-                      {label: 'Neutro', value: 'neutro'},
-                      {label: 'Detrator', value: 'detrator'}
-                    ]} />
-                    <Select label="MHS (Happiness)" value={currentInput.mhs} onChange={v => handleChange('mhs', v)} options={[
-                      {label: 'Muito Desapontado', value: 'muito_desapontado'},
-                      {label: 'Pouco', value: 'pouco'},
-                      {label: 'Indiferente', value: 'indiferente'},
-                      {label: 'Nada', value: 'nada'}
-                    ]} />
-                    <Select label="Pesquisa Geral Respondida?" value={currentInput.pesquisa_geral_respondida} onChange={v => handleChange('pesquisa_geral_respondida', v)} options={[
-                      {label: 'Sim', value: 'sim'},
-                      {label: 'Não', value: 'nao'}
-                    ]} />
+                  
+                  {/* Step 1: Is the client eligible for surveys? */}
+                  <div className="bg-orange-50 p-4 rounded-lg border border-orange-100 mb-6">
+                    <Select 
+                        label="Este cliente está apto à responder as pesquisas?" 
+                        value={currentInput.cliente_apto_pesquisa || 'sim'} 
+                        onChange={v => handleChange('cliente_apto_pesquisa', v)} 
+                        options={[
+                          {label: 'Sim', value: 'sim'},
+                          {label: 'Não', value: 'nao'}
+                        ]} 
+                    />
+                    {currentInput.cliente_apto_pesquisa === 'nao' && (
+                        <p className="text-xs text-orange-600 mt-2 font-bold">
+                            * Pontuação desta vertical será zerada e redistribuída para as outras verticais.
+                        </p>
+                    )}
                   </div>
+
+                  {/* Only show the rest if YES */}
+                  {(currentInput.cliente_apto_pesquisa !== 'nao') && (
+                      <div className="grid grid-cols-1 gap-6">
+                        <Select label="CSAT Técnico" value={currentInput.csat_tecnico} onChange={v => handleChange('csat_tecnico', v)} options={[
+                          {label: '> 4.5', value: 'gt_4.5'},
+                          {label: 'Até 4', value: 'ate_4'},
+                          {label: 'Até 3.5', value: 'ate_3.5'},
+                          {label: '< 3', value: 'lt_3'}
+                        ]} />
+                        <Select label="NPS" value={currentInput.nps} onChange={v => handleChange('nps', v)} options={[
+                          {label: 'Promotor', value: 'promotor'},
+                          {label: 'Neutro', value: 'neutro'},
+                          {label: 'Detrator', value: 'detrator'}
+                        ]} />
+                        <Select label="MHS (Happiness)" value={currentInput.mhs} onChange={v => handleChange('mhs', v)} options={[
+                          {label: 'Muito Desapontado', value: 'muito_desapontado'},
+                          {label: 'Pouco', value: 'pouco'},
+                          {label: 'Indiferente', value: 'indiferente'},
+                          {label: 'Nada', value: 'nada'}
+                        ]} />
+                        <Select label="Pesquisa Geral Respondida?" value={currentInput.pesquisa_geral_respondida} onChange={v => handleChange('pesquisa_geral_respondida', v)} options={[
+                          {label: 'Sim', value: 'sim'},
+                          {label: 'Não', value: 'nao'}
+                        ]} />
+                      </div>
+                  )}
                 </div>
               )}
             </div>

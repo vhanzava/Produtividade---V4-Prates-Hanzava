@@ -70,8 +70,9 @@ const getFlag = (score: number): { color: HealthFlagColor; action: string } => {
 
 export const calculateHealthScore = (input: HealthInput, clientConfig: ClientConfig): HealthScoreResult => {
   
-  // 0. Check if client expects measurable results
+  // 0. Check qualifiers
   const expectsMeasurableResults = input.espera_resultado_mensuravel !== 'nao';
+  const isEligibleForSurveys = input.cliente_apto_pesquisa !== 'nao';
 
   // 1. Vertical 1: Engajamento
   let v1Raw = 0;
@@ -132,7 +133,8 @@ export const calculateHealthScore = (input: HealthInput, clientConfig: ClientCon
         v2Raw = rawRoiComponent + rawSocialComponent;
       }
     
-      v2Final = v2Raw * WEIGHTS.vertical_2.multiplier;
+      // We apply the multiplier later
+      v2Final = v2Raw; 
   } else {
       // If client does NOT expect measurable results, score is 0.
       v2Final = 0;
@@ -148,41 +150,52 @@ export const calculateHealthScore = (input: HealthInput, clientConfig: ClientCon
 
   // 4. Vertical 4: Pesquisas
   let v4Raw = 0;
-  v4Raw += SCORES.v4.csat[input.csat_tecnico] || 0;
-  v4Raw += SCORES.v4.nps[input.nps] || 0;
-  v4Raw += SCORES.v4.mhs[input.mhs] || 0;
-  v4Raw += SCORES.v4.pesquisa_geral[input.pesquisa_geral_respondida] || 0;
+  if (isEligibleForSurveys) {
+      v4Raw += SCORES.v4.csat[input.csat_tecnico] || 0;
+      v4Raw += SCORES.v4.nps[input.nps] || 0;
+      v4Raw += SCORES.v4.mhs[input.mhs] || 0;
+      v4Raw += SCORES.v4.pesquisa_geral[input.pesquisa_geral_respondida] || 0;
+  }
 
-  // Apply Multipliers based on Expectation
+  // Apply Multipliers based on Expectations and Eligibility
   let v1Final, v3Final, v4Final;
 
-  if (expectsMeasurableResults) {
-      // Standard Multipliers
-      v1Final = v1Raw * WEIGHTS.vertical_1.multiplier; // 1.4
-      v3Final = v3Raw * WEIGHTS.vertical_3.multiplier; // 1.0
-      v4Final = v4Raw * WEIGHTS.vertical_4.multiplier; // 0.6
-  } else {
-      // Redistributed Multipliers (Total 100 pts distributed to v1, v3, v4)
-      // v1 (Engagement): Base 25 -> Target 35 (x1.4) -> Wait, standard is 35.
-      // Let's re-calculate standard total:
-      // v1: 25 * 1.4 = 35
-      // v2: 25 * 1.0 = 25
-      // v3: 25 * 1.0 = 25
-      // v4: 25 * 0.6 = 15
-      // Total = 100.
-      
-      // New Distribution (v2 = 0):
-      // We have 25 points from v2 to distribute.
-      // User: "Relacionamento receberá mais pontos que Pesquisa".
-      // Let's add:
-      // v3 (Relationship): +15 points -> Target 40. (Multiplier 1.6)
-      // v1 (Engagement): +5 points -> Target 40. (Multiplier 1.6)
-      // v4 (Surveys): +5 points -> Target 20. (Multiplier 0.8)
-      // Total: 40 + 0 + 40 + 20 = 100.
-      
+  if (expectsMeasurableResults && isEligibleForSurveys) {
+      // Case 1: Standard (All Active)
+      v1Final = v1Raw * WEIGHTS.vertical_1.multiplier; // 1.4 (35 pts)
+      v2Final = v2Final * WEIGHTS.vertical_2.multiplier; // 1.0 (25 pts)
+      v3Final = v3Raw * WEIGHTS.vertical_3.multiplier; // 1.0 (25 pts)
+      v4Final = v4Raw * WEIGHTS.vertical_4.multiplier; // 0.6 (15 pts)
+  } else if (!expectsMeasurableResults && isEligibleForSurveys) {
+      // Case 2: Results Disabled (Redistribute V2 to V1, V3, V4)
+      // V1: 40 pts (1.6)
+      // V2: 0 pts
+      // V3: 40 pts (1.6)
+      // V4: 20 pts (0.8)
       v1Final = v1Raw * 1.6;
+      v2Final = 0;
       v3Final = v3Raw * 1.6;
       v4Final = v4Raw * 0.8;
+  } else if (expectsMeasurableResults && !isEligibleForSurveys) {
+      // Case 3: Surveys Disabled (Redistribute V4 to V1, V2, V3)
+      // V1: 41.18 pts (1.647)
+      // V2: 29.41 pts (1.176)
+      // V3: 29.41 pts (1.176)
+      // V4: 0 pts
+      v1Final = v1Raw * 1.647;
+      v2Final = v2Final * 1.176;
+      v3Final = v3Raw * 1.176;
+      v4Final = 0;
+  } else {
+      // Case 4: Both Disabled (Redistribute V2 & V4 to V1, V3)
+      // V1: 58.33 pts (2.333)
+      // V2: 0 pts
+      // V3: 41.66 pts (1.666)
+      // V4: 0 pts
+      v1Final = v1Raw * 2.333;
+      v2Final = 0;
+      v3Final = v3Raw * 1.666;
+      v4Final = 0;
   }
 
   // Total
