@@ -34,7 +34,7 @@ const INITIAL_INPUT: Omit<HealthInput, 'clientId' | 'monthKey'> = {
 };
 
 const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs, allHealthInputs = [], onSaveInput, canEdit }) => {
-  const [view, setView] = useState<'home' | 'list' | 'evolution'>('home');
+  const [view, setView] = useState<'home' | 'list' | 'evolution' | 'kanban'>('home');
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<number>(6);
   const [isEditing, setIsEditing] = useState(false);
@@ -161,10 +161,6 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
       }
       
       // 2. Engagement & Relationship (Weekly - Friday)
-      // Logic: Due every Friday. 
-      // Next Due = Next Friday from last_updated.
-      // If last_updated is null (shouldn't happen if input exists, but safe check), due now.
-      
       const checkWeekly = (lastDateStr: string | undefined, verticalName: string) => {
           let nextDue = new Date();
           if (lastDateStr) {
@@ -175,15 +171,7 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
               const lastFriday = new Date(lastDate);
               lastFriday.setDate(lastDate.getDate() + diffToFriday);
               
-              // If updated before that Friday, it was for that week. Next due is next Friday.
-              // If updated ON or AFTER that Friday, it counts for that week. Next due is next Friday.
-              // Actually simpler: Just add 7 days to the "Due Date" of the previous cycle.
-              // But we don't store "Due Date". We store "Last Updated".
-              
               // Let's project: Next Due is the *next upcoming Friday* after the last update.
-              // Example: Updated Mon 23rd. Next Friday is Fri 27th.
-              // Example: Updated Fri 27th. Next Friday is Fri 3rd.
-              
               const nextFriday = new Date(lastDate);
               nextFriday.setDate(lastDate.getDate() + ((7 - lastDate.getDay() + 5) % 7));
               if (lastDate.getDay() === 5) {
@@ -220,13 +208,6 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
               const day = lastDate.getDate();
               const month = lastDate.getMonth();
               const year = lastDate.getFullYear();
-              
-              // Windows: 1-5 and 15-20.
-              // If updated 1-5 -> Next due 20th same month.
-              // If updated 15-20 -> Next due 5th next month.
-              // If updated outside? 
-              //   If < 15 -> Next due 20th.
-              //   If > 20 -> Next due 5th next month.
               
               if (day <= 14) {
                   // Due 20th of same month
@@ -379,6 +360,12 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
             >
               <Activity size={16} /> Evolução
             </button>
+            <button 
+              onClick={() => setView('kanban')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-all ${view === 'kanban' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <LayoutGrid size={16} className="rotate-90" /> Kanban
+            </button>
           </div>
         </div>
         <div className="flex gap-2">
@@ -392,22 +379,22 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
       {/* HOME VIEW */}
       {view === 'home' && !isEditing && (
         <div className="space-y-6">
-            {/* Global Alert - Data Blackout */}
-            {reminders.length > 0 && (
+            {/* Global Alert - Data Blackout (Only Overdue) */}
+            {reminders.filter(r => r.status === 'overdue').length > 0 && (
                 <div className={`rounded-lg p-4 border flex items-start gap-3 ${
-                    reminders.length > activeClients.length * 0.5 
+                    reminders.filter(r => r.status === 'overdue').length > activeClients.length * 0.5 
                     ? 'bg-red-50 border-red-200 text-red-800' 
                     : 'bg-orange-50 border-orange-200 text-orange-800'
                 }`}>
-                    <AlertTriangle className={`shrink-0 ${reminders.length > activeClients.length * 0.5 ? 'text-red-600' : 'text-orange-600'}`} />
+                    <AlertTriangle className={`shrink-0 ${reminders.filter(r => r.status === 'overdue').length > activeClients.length * 0.5 ? 'text-red-600' : 'text-orange-600'}`} />
                     <div>
                         <h3 className="font-bold text-lg">
-                            {reminders.length > activeClients.length * 0.5 ? 'CRÍTICO: Apagão de Dados Detectado' : 'Atenção: Dados Desatualizados'}
+                            {reminders.filter(r => r.status === 'overdue').length > activeClients.length * 0.5 ? 'CRÍTICO: Apagão de Dados Detectado' : 'Atenção: Dados Desatualizados'}
                         </h3>
                         <p className="text-sm mt-1 opacity-90">
-                            {reminders.length > activeClients.length * 0.5 
-                                ? `Mais de 50% da carteira (${reminders.length} pendências) está com dados desatualizados. O Health Score não reflete a realidade.`
-                                : `Existem ${reminders.length} atualizações pendentes. Mantenha os dados em dia para evitar distorções no score.`
+                            {reminders.filter(r => r.status === 'overdue').length > activeClients.length * 0.5 
+                                ? `Mais de 50% da carteira (${reminders.filter(r => r.status === 'overdue').length} pendências atrasadas) está com dados desatualizados. O Health Score não reflete a realidade.`
+                                : `Existem ${reminders.filter(r => r.status === 'overdue').length} atualizações atrasadas. Mantenha os dados em dia para evitar distorções no score.`
                             }
                         </p>
                     </div>
@@ -504,39 +491,40 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
             )}
           </div>
 
-          {/* Stats Card */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <Activity className="text-blue-500" />
-              Resumo da Carteira
-            </h3>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-green-50 rounded border border-green-100">
-                <span className="text-green-800 font-medium">Saudável (81-100)</span>
-                <span className="text-xl font-bold text-green-900">{Object.values(scores).filter(s => s.flag === 'Green').length}</span>
+          {/* Client Ranking */}
+          <div className="lg:col-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
+                  <Activity className="text-blue-500" />
+                  Ranking de Saúde
+              </h3>
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+                  {Object.entries(scores)
+                      .sort(([, a], [, b]) => b.score - a.score)
+                      .map(([name, result], idx) => (
+                          <div key={name} className="flex items-center justify-between p-3 bg-gray-50 rounded border border-gray-100">
+                              <div className="flex items-center gap-3">
+                                  <span className="text-xs font-bold text-gray-400 w-4">{idx + 1}º</span>
+                                  <div>
+                                      <p className="font-medium text-sm text-gray-900 truncate max-w-[120px]">{name}</p>
+                                      <p className="text-[10px] text-gray-500">{result.action}</p>
+                                  </div>
+                              </div>
+                              <span className={`px-2 py-1 rounded text-xs font-bold border ${getFlagColor(result.flag)}`}>
+                                  {result.score.toFixed(0)}
+                              </span>
+                          </div>
+                      ))
+                  }
               </div>
-              <div className="flex justify-between items-center p-3 bg-yellow-50 rounded border border-yellow-100">
-                <span className="text-yellow-800 font-medium">Atenção (51-80)</span>
-                <span className="text-xl font-bold text-yellow-900">{Object.values(scores).filter(s => s.flag === 'Yellow').length}</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-red-50 rounded border border-red-100">
-                <span className="text-red-800 font-medium">Risco (26-50)</span>
-                <span className="text-xl font-bold text-red-900">{Object.values(scores).filter(s => s.flag === 'Red').length}</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-gray-100 rounded border border-gray-200">
-                <span className="text-gray-800 font-medium">Churn (0-25)</span>
-                <span className="text-xl font-bold text-gray-900">{Object.values(scores).filter(s => s.flag === 'Black').length}</span>
-              </div>
-            </div>
           </div>
 
           {/* Revenue per Flag */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
                   <DollarSign className="text-green-600" />
                   Receita (MRR) em Risco
               </h3>
-              <div className="space-y-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   {['Green', 'Yellow', 'Red', 'Black'].map(flag => {
                       const flagClients = activeClients.filter(c => scores[c.name]?.flag === flag);
                       const totalRevenue = flagClients.reduce((sum, c) => sum + (c.defaultFee || 0), 0);
@@ -544,13 +532,14 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
                       const bgClass = flag === 'Green' ? 'bg-green-50' : flag === 'Yellow' ? 'bg-yellow-50' : flag === 'Red' ? 'bg-red-50' : 'bg-gray-100';
                       
                       return (
-                          <div key={flag} className={`flex justify-between items-center p-3 rounded border border-transparent ${bgClass}`}>
-                              <span className={`font-medium ${colorClass}`}>
+                          <div key={flag} className={`flex flex-col p-4 rounded border border-transparent ${bgClass}`}>
+                              <span className={`font-medium mb-1 ${colorClass}`}>
                                   {flag === 'Green' ? 'Saudável' : flag === 'Yellow' ? 'Atenção' : flag === 'Red' ? 'Risco' : 'Churn'}
                               </span>
-                              <span className={`font-bold ${colorClass}`}>
-                                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalRevenue)}
+                              <span className={`text-xl font-bold ${colorClass}`}>
+                                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totalRevenue)}
                               </span>
+                              <span className="text-xs opacity-75 mt-1">{flagClients.length} clientes</span>
                           </div>
                       );
                   })}
@@ -695,6 +684,84 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
                     </div>
                 </div>
             </div>
+        </div>
+      )}
+
+      {/* KANBAN VIEW */}
+      {view === 'kanban' && !isEditing && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 h-full overflow-x-auto pb-4">
+          {[
+            { id: 'Green', label: 'Saudável', range: '81-100', color: 'bg-green-50 border-green-200', header: 'text-green-800' },
+            { id: 'Yellow', label: 'Atenção', range: '51-80', color: 'bg-yellow-50 border-yellow-200', header: 'text-yellow-800' },
+            { id: 'Red', label: 'Risco', range: '26-50', color: 'bg-red-50 border-red-200', header: 'text-red-800' },
+            { id: 'Black', label: 'Churn', range: '0-25', color: 'bg-gray-100 border-gray-200', header: 'text-gray-800' }
+          ].map(column => {
+            const columnClients = activeClients
+                .filter(c => (scores[c.name]?.flag || 'Black') === column.id)
+                .sort((a, b) => (scores[b.name]?.score || 0) - (scores[a.name]?.score || 0));
+
+            return (
+              <div key={column.id} className={`flex flex-col rounded-lg border ${column.color} h-full min-h-[500px]`}>
+                <div className="p-3 border-b border-gray-200/50 flex justify-between items-center">
+                  <div>
+                    <h3 className={`font-bold ${column.header}`}>{column.label}</h3>
+                    <span className="text-xs opacity-70">{column.range} pts</span>
+                  </div>
+                  <span className="bg-white/50 px-2 py-1 rounded text-xs font-bold">
+                    {columnClients.length}
+                  </span>
+                </div>
+                <div className="p-2 space-y-2 flex-1 overflow-y-auto">
+                  {columnClients.map(client => {
+                    const score = scores[client.name];
+                    return (
+                      <div 
+                        key={client.name}
+                        onClick={() => handleEdit(client)}
+                        className="bg-white p-3 rounded shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-all group"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-bold text-gray-900 text-sm truncate pr-2">{client.name}</h4>
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${getFlagColor(score?.flag || 'Black')}`}>
+                            {score?.score.toFixed(0)}
+                          </span>
+                        </div>
+                        
+                        {score && (
+                            <div className="grid grid-cols-4 gap-1 mb-2">
+                                <div className="h-1 rounded-full bg-blue-200 overflow-hidden" title={`Engajamento: ${score.breakdown.engagement}`}>
+                                    <div className="h-full bg-blue-500" style={{width: `${(score.breakdown.engagement/35)*100}%`}}></div>
+                                </div>
+                                <div className="h-1 rounded-full bg-green-200 overflow-hidden" title={`Resultados: ${score.breakdown.results}`}>
+                                    <div className="h-full bg-green-500" style={{width: `${(score.breakdown.results/25)*100}%`}}></div>
+                                </div>
+                                <div className="h-1 rounded-full bg-purple-200 overflow-hidden" title={`Relacionamento: ${score.breakdown.relationship}`}>
+                                    <div className="h-full bg-purple-500" style={{width: `${(score.breakdown.relationship/25)*100}%`}}></div>
+                                </div>
+                                <div className="h-1 rounded-full bg-orange-200 overflow-hidden" title={`Pesquisas: ${score.breakdown.surveys}`}>
+                                    <div className="h-full bg-orange-500" style={{width: `${(score.breakdown.surveys/15)*100}%`}}></div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex justify-between items-center mt-2">
+                            <span className="text-[10px] text-gray-500 truncate max-w-[100px]">
+                                {client.accountManager || 'Sem Account'}
+                            </span>
+                            <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500" />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {columnClients.length === 0 && (
+                      <div className="text-center py-8 opacity-40 text-sm">
+                          Nenhum cliente
+                      </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
