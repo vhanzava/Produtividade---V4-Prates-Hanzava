@@ -388,7 +388,6 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                             <Cell key={`cell-${index}`} fill={entry.Ocupacao > 100 ? '#ef4444' : entry.Ocupacao > 85 ? '#eab308' : '#b91c1c'} />
                         ))}
                       </Bar>
-                      <ReferenceLine y={160} label="Ref 160h" stroke="red" strokeDasharray="3 3" />
                   </BarChart>
               </ResponsiveContainer>
            </div>

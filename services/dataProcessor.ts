@@ -175,9 +175,27 @@ export const calculateSummary = (
   const empMap = new Map(employees.map(e => [e.name, e]));
   const clientMap = new Map(clients.map(c => [c.name, c]));
 
-  const start = startDateStr ? new Date(startDateStr + 'T00:00:00') : new Date();
-  const end = endDateStr ? new Date(endDateStr + 'T00:00:00') : new Date();
-  const activeMonths = startDateStr && endDateStr ? getMonthsInRange(start, end) : [];
+  // Determine effective date range
+  let start: Date;
+  let end: Date;
+  let hasDateFilter = !!(startDateStr && endDateStr);
+
+  if (startDateStr && endDateStr) {
+      start = new Date(startDateStr + 'T00:00:00');
+      end = new Date(endDateStr + 'T00:00:00');
+  } else if (entries.length > 0) {
+      // Infer from entries if no filter provided
+      const dates = entries.map(e => e.date.getTime());
+      start = new Date(Math.min(...dates));
+      end = new Date(Math.max(...dates));
+      hasDateFilter = true; // Treat as if we have a range for calculation purposes
+  } else {
+      start = new Date();
+      end = new Date();
+      hasDateFilter = false;
+  }
+
+  const activeMonths = hasDateFilter ? getMonthsInRange(start, end) : [];
 
   const getProRataRatio = (monthKey: string, empStartStr?: string, empEndStr?: string): number => {
     // Base filter range
@@ -195,7 +213,7 @@ export const calculateSummary = (
         if (empEnd < filterEnd) filterEnd = empEnd;
     }
 
-    if (!startDateStr && !endDateStr && !empStartStr && !empEndStr) return 1;
+    if (!hasDateFilter && !empStartStr && !empEndStr) return 1;
 
     const [y, m] = monthKey.split('-').map(Number);
     const monthStart = new Date(y, m - 1, 1);
