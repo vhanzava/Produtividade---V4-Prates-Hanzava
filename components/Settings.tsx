@@ -8,6 +8,7 @@ interface SettingsProps {
   clients: ClientConfig[];
   onUpdateEmployees: (emps: EmployeeConfig[]) => void;
   onUpdateClients: (clients: ClientConfig[]) => void;
+  canEdit?: boolean;
 }
 
 const DEPARTMENTS: DepartmentType[] = ['Criação', 'Atendimento', 'Gestão de Tráfego', 'Gestão', 'Outros'];
@@ -28,7 +29,7 @@ const generateMonthOptions = () => {
 const monthOptions = generateMonthOptions();
 const INPUT_STYLE = "bg-gray-700 text-white border-gray-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 block w-full sm:text-sm p-1.5 border";
 
-const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmployees, onUpdateClients }) => {
+const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmployees, onUpdateClients, canEdit = true }) => {
   const [activeTab, setActiveTab] = useState<'employees' | 'clients'>('employees');
   const [selectedMonth, setSelectedMonth] = useState<string>('default');
   
@@ -45,6 +46,16 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
   
   // Ref for hidden file input used for contract uploads
   const fileInputRefs = useRef<{[key: number]: HTMLInputElement | null}>({});
+
+  if (!canEdit) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+        <UserX className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+        <h3 className="text-lg font-medium text-gray-900">Acesso Restrito</h3>
+        <p className="text-gray-500 mt-2">Você não tem permissão para editar as configurações de produtividade.</p>
+      </div>
+    );
+  }
 
   const handleEmpChange = (index: number, field: string, value: string) => {
     const newEmps = [...localEmps];
@@ -251,7 +262,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                       Custo Mensal {selectedMonth !== 'default' && '(Exceção)'}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Capacidade {selectedMonth !== 'default' && '(Exceção)'}
+                      Capacidade (Auto)
                   </th>
                 </tr>
               </thead>
@@ -292,13 +303,8 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                         onChange={(e) => handleEmpChange(idx, 'monthlyCost', e.target.value)}
                       />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <input
-                        type="number"
-                        className={INPUT_STYLE}
-                        value={getEmpValue(emp, 'hours')}
-                        onChange={(e) => handleEmpChange(idx, 'monthlyHours', e.target.value)}
-                      />
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400 italic">
+                      8h/dia úteis
                     </td>
                   </tr>
                 ))}

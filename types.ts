@@ -84,6 +84,10 @@ export interface UserSession {
   email: string;
   isMaster: boolean;
   isAuthenticated: boolean;
+  permissions: {
+    canEditHealthScore: boolean;
+    canEditProductivity: boolean;
+  };
 }
 
 export interface SystemBackup {

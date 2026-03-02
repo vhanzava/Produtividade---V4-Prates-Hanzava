@@ -27,13 +27,19 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       return;
     }
 
-    // Regra 2: Definir Master
+    // Regra 2: Definir Master e Permissões
     const isMaster = normalizedEmail === 'vinicius.hanzava@v4company.com';
-    
+    const canEditHealthScore = isMaster || ['lara.davila@v4company.com', 'caina.rossini@v4company.com'].includes(normalizedEmail);
+    const canEditProductivity = isMaster; // Apenas master edita produtividade por enquanto
+
     onLogin({
       email: normalizedEmail,
       isMaster: isMaster,
-      isAuthenticated: true
+      isAuthenticated: true,
+      permissions: {
+        canEditHealthScore,
+        canEditProductivity
+      }
     });
   };
 

@@ -75,6 +75,12 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
   // FILTER LOGIC
   const activeClientSummaries = clientSummaries.filter(c => (c.isActive || c.totalHours > 0) && (categoryFilter === 'All' || c.category === categoryFilter));
   
+  // Filter employees: show if totalHours > 0 OR (capacityHours > 0 AND totalHours > 0)
+  // Request: "se o player não tem horas apontadas ... não deve aparecer"
+  // Request: "se esse player já saiu, mas filtrei um período que tem apontamentos ... cabe mostra-lo"
+  // Simplification: Show if totalHours > 0.
+  const activeEmployeeSummaries = employeeSummaries.filter(e => e.totalHours > 0);
+
   const sortedClients = [...activeClientSummaries].sort((a, b) => {
     const valA = a[clientSortConfig.key];
     const valB = b[clientSortConfig.key];
@@ -83,7 +89,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
     return 0;
   });
 
-  const sortedEmployees = [...employeeSummaries].sort((a, b) => {
+  const sortedEmployees = [...activeEmployeeSummaries].sort((a, b) => {
       const valA = a[employeeSortConfig.key];
       const valB = b[employeeSortConfig.key];
       if (valA < valB) return employeeSortConfig.direction === 'asc' ? -1 : 1;
@@ -123,7 +129,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
       Realizado: d.totalHoursRealized
   }));
 
-  const employeeChartData = employeeSummaries.map(e => ({
+  const employeeChartData = activeEmployeeSummaries.map(e => ({
       name: e.name.split(' ')[0], 
       Capacidade: e.capacityHours,
       Realizado: e.totalHours,

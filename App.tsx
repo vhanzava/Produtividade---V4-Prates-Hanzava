@@ -539,11 +539,23 @@ const App: React.FC = () => {
               activeTab === 'dashboard' ? (
                 <Dashboard summary={summary} /> 
               ) : (
-                <Settings employees={employees} clients={clients} onUpdateEmployees={handleUpdateEmployees} onUpdateClients={handleUpdateClients} />
+                <Settings 
+                  employees={employees} 
+                  clients={clients} 
+                  onUpdateEmployees={handleUpdateEmployees} 
+                  onUpdateClients={handleUpdateClients} 
+                  canEdit={session.permissions?.canEditProductivity ?? session.isMaster}
+                />
               )
             )
         ) : (
-            <HealthDashboard clients={clients} savedInputs={healthInputs} allHealthInputs={allHealthInputs} onSaveInput={saveHealthInput} canEdit={!!session?.isMaster} />
+            <HealthDashboard 
+              clients={clients} 
+              savedInputs={healthInputs} 
+              allHealthInputs={allHealthInputs} 
+              onSaveInput={saveHealthInput} 
+              canEdit={session.permissions?.canEditHealthScore ?? session.isMaster} 
+            />
         )}
       </main>
     </div>

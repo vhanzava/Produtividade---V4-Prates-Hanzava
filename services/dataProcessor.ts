@@ -90,7 +90,55 @@ export const parseCSV = (csvContent: string): TimeEntry[] => {
   return entries;
 };
 
-// Helper: Count working days (Mon-Sat) in range
+// Helper: Get Brazilian Holidays for a given year
+const getHolidays = (year: number): string[] => {
+  const fixed = [
+    `${year}-01-01`, // Confraternização Universal
+    `${year}-04-21`, // Tiradentes
+    `${year}-05-01`, // Dia do Trabalho
+    `${year}-09-07`, // Independência do Brasil
+    `${year}-10-12`, // Nossa Senhora Aparecida
+    `${year}-11-02`, // Finados
+    `${year}-11-15`, // Proclamação da República
+    `${year}-11-20`, // Dia da Consciência Negra
+    `${year}-12-25`, // Natal
+  ];
+
+  // Movable holidays (Easter based)
+  const getEaster = (y: number) => {
+    const a = y % 19;
+    const b = Math.floor(y / 100);
+    const c = y % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31);
+    const day = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(y, month - 1, day);
+  };
+
+  const easter = getEaster(year);
+  const addDays = (date: Date, days: number) => {
+    const result = new Date(date);
+    result.setDate(result.getDate() + days);
+    return result.toISOString().split('T')[0];
+  };
+
+  const carnivalTue = addDays(easter, -47);
+  const carnivalMon = addDays(easter, -48);
+  const goodFriday = addDays(easter, -2);
+  const corpusChristi = addDays(easter, 60);
+
+  return [...fixed, carnivalMon, carnivalTue, goodFriday, corpusChristi];
+};
+
+// Helper: Count working days (Mon-Fri) in range, excluding ONLY weekends
 const countWorkingDays = (start: Date, end: Date): number => {
   let count = 0;
   const current = new Date(start);
@@ -100,7 +148,10 @@ const countWorkingDays = (start: Date, end: Date): number => {
 
   while (current <= last) {
     const day = current.getDay();
-    if (day !== 0) { // 0 is Sunday. Mon(1)-Sat(6) are working days.
+    
+    // 0 is Sunday, 6 is Saturday. Mon(1)-Fri(5) are working days.
+    // Holidays are considered working days as per user request.
+    if (day !== 0 && day !== 6) {
       count++;
     }
     current.setDate(current.getDate() + 1);
@@ -290,15 +341,25 @@ export const calculateSummary = (
       if (config) {
           dept = config.department;
           activeMonths.forEach(m => {
-             const mConfig = config.history[m];
-             const monthlyCap = mConfig ? mConfig.hours : config.defaultHours;
+             const [y, month] = m.split('-').map(Number);
+             const monthStart = new Date(y, month - 1, 1);
+             const monthEnd = new Date(y, month, 0);
+             const totalWorkingDays = countWorkingDays(monthStart, monthEnd);
+             const monthlyCap = totalWorkingDays * 8; // Dynamic capacity: 8h * working days
+
              const ratio = getProRataRatio(m, config.startDate, config.endDate);
              totalCapacity += monthlyCap * ratio;
           });
       } else {
           activeMonths.forEach(m => {
+            const [y, month] = m.split('-').map(Number);
+            const monthStart = new Date(y, month - 1, 1);
+            const monthEnd = new Date(y, month, 0);
+            const totalWorkingDays = countWorkingDays(monthStart, monthEnd);
+            const monthlyCap = totalWorkingDays * 8;
+
             const ratio = getProRataRatio(m);
-            totalCapacity += 160 * ratio;
+            totalCapacity += monthlyCap * ratio;
           });
       }
 
