@@ -332,16 +332,17 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                   <input
                                     type="number"
                                     min="0"
-                                    placeholder="Auto"
+                                    step="0.5"
+                                    placeholder="8"
                                     value={vh}
                                     onChange={e => handleEmpVerticalHours(idx, v, e.target.value)}
-                                    className={`w-16 text-xs text-center border rounded px-1 py-0.5 bg-white focus:outline-none focus:ring-1 ${palette.ring} ${palette.border}`}
+                                    className={`w-14 text-xs text-center border rounded px-1 py-0.5 bg-white focus:outline-none focus:ring-1 ${palette.ring} ${palette.border}`}
                                   />
-                                  <span className="text-[10px] text-gray-400">h/mês</span>
+                                  <span className="text-[10px] text-gray-400">h/dia útil</span>
                                 </div>
                               )}
                               {active && !vh && (
-                                <span className="text-[9px] text-gray-400 italic">8h/dia úteis</span>
+                                <span className="text-[9px] text-gray-400 italic">padrão 8h</span>
                               )}
                             </div>
                           );

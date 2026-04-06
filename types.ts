@@ -27,9 +27,9 @@ export interface EmployeeConfig {
   startDate?: string; // YYYY-MM-DD
   endDate?: string;   // YYYY-MM-DD
   verticals?: ClientCategory[]; // Verticais em que o player atua
-  // Horas mensais esperadas por vertical (manual). Quando preenchido,
-  // substitui o cálculo automático de 8h/dia para aquela vertical.
-  // Ex: Vinicius → { Executar: 40, Saber: 80 }
+  // Horas DIÁRIAS esperadas por vertical (manual). Quando preenchido,
+  // substitui o "8h/dia útil" do cálculo automático para aquela vertical.
+  // Ex: Vinicius → { Executar: 2, Saber: 5 } (2h/dia como coord, 5h/dia como consultor)
   verticalHours?: Partial<Record<ClientCategory, number>>;
   history: Record<string, MonthlyConfigEmp>; // key: "YYYY-MM"
 }

@@ -383,12 +383,17 @@ export const calculateSummary = (
           dept = config.department;
 
           if (useManual) {
-              // Capacidade manual: horas mensais por vertical × proRata do período
+              // Capacidade manual: horas DIÁRIAS × dias úteis do mês × proRata
+              // Mesma lógica do auto (8h × dias úteis), mas com o valor configurado pelo usuário
               activeMonths.forEach(m => {
+                  const [y, month] = m.split('-').map(Number);
+                  const monthStart = new Date(y, month - 1, 1);
+                  const monthEnd = new Date(y, month, 0);
+                  const workingDays = countWorkingDays(monthStart, monthEnd);
                   const ratio = getProRataRatio(m, config.startDate, config.endDate);
                   playerVerticals.forEach(v => {
-                      const monthlyH = vertHours[v] ?? 0;
-                      const contribution = monthlyH * ratio;
+                      const dailyH = vertHours[v] ?? 0;
+                      const contribution = workingDays * dailyH * ratio;
                       capacityByVertical[v] += contribution;
                       totalCapacity += contribution;
                   });
