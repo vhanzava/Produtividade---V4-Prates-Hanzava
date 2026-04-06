@@ -161,17 +161,24 @@ const App: React.FC = () => {
               updated_at: new Date().toISOString()
           };
 
-          const { data: savedRows, error } = await supabase
+          // Estratégia robusta: UPDATE primeiro → se não atualizou nenhuma linha, INSERT
+          // Isso evita depender de constraint UNIQUE implícita no banco e é sempre explícito.
+          const { data: updatedRows, error: updateError } = await supabase
             .from('health_inputs')
-            .upsert(payload, { onConflict: 'client_id,month_key' })
+            .update(payload)
+            .eq('client_id', input.clientId)
+            .eq('month_key', input.monthKey)
             .select();
 
-          if (error) throw error;
+          if (updateError) throw updateError;
 
-          // Detecta silent failure: upsert "succeeded" mas nenhuma linha foi escrita
-          // (acontece quando a política RLS bloqueia a operação sem retornar erro)
-          if (savedRows !== null && savedRows.length === 0) {
-              throw new Error('Sem permissão para salvar (RLS bloqueou a escrita). Contacte o administrador.');
+          if (!updatedRows || updatedRows.length === 0) {
+              // Nenhuma linha existia para esse client_id+month_key: INSERT
+              const { error: insertError } = await supabase
+                .from('health_inputs')
+                .insert(payload);
+
+              if (insertError) throw insertError;
           }
 
           // Registro manual no histórico com autoria e diff old→new
