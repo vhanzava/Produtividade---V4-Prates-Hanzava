@@ -239,24 +239,91 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
             })}
           </div>
 
-          {/* Capacidade Global */}
-          <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 flex flex-col items-center">
-             <h3 className="text-xl font-medium leading-6 text-gray-900 mb-6 text-center">Utilização da Capacidade Global</h3>
-             <div className="h-[500px] w-full max-w-2xl relative">
+          {/* Capacidade e Ocupação por Vertical */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            {/* Gráfico Barras: Capacidade vs Realizado por Vertical */}
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+              <h3 className="text-base font-semibold text-gray-900 mb-1">Capacidade vs Realizado por Vertical</h3>
+              <p className="text-xs text-gray-400 mb-4">Capacidade = horas configuradas por vertical do player · Realizado = horas lançadas por categoria de cliente</p>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={(['Executar', 'Saber', 'Ter'] as const).map(cat => ({
+                      name: cat,
+                      Capacidade: parseFloat((dashboard.capacityByVertical[cat] || 0).toFixed(1)),
+                      Realizado:  parseFloat((dashboard.hoursByVertical[cat]    || 0).toFixed(1)),
+                      taxa: dashboard.capacityByVertical[cat] > 0
+                        ? ((dashboard.hoursByVertical[cat] / dashboard.capacityByVertical[cat]) * 100).toFixed(0)
+                        : '0'
+                    }))}
+                    margin={{ top: 10, right: 20, left: 0, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 13, fontWeight: 600 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(v: number) => `${fmtNum(v)}h`} />
+                    <Legend verticalAlign="top" wrapperStyle={{ paddingBottom: 8 }} />
+                    <Bar dataKey="Capacidade" fill="#e5e7eb" radius={[4,4,0,0]} />
+                    <Bar dataKey="Realizado" radius={[4,4,0,0]}>
+                      {(['Executar', 'Saber', 'Ter'] as const).map(cat => (
+                        <Cell key={cat} fill={cat === 'Executar' ? '#b91c1c' : cat === 'Saber' ? '#d97706' : '#16a34a'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              {/* Taxa de ocupação por vertical */}
+              <div className="mt-4 grid grid-cols-3 gap-3">
+                {(['Executar', 'Saber', 'Ter'] as const).map(cat => {
+                  const cap = dashboard.capacityByVertical[cat] || 0;
+                  const real = dashboard.hoursByVertical[cat] || 0;
+                  const taxa = cap > 0 ? (real / cap) * 100 : 0;
+                  const colorBar = cat === 'Executar' ? 'bg-red-600' : cat === 'Saber' ? 'bg-yellow-500' : 'bg-green-600';
+                  const colorText = cat === 'Executar' ? 'text-red-700' : cat === 'Saber' ? 'text-yellow-700' : 'text-green-700';
+                  return (
+                    <div key={cat} className="text-center">
+                      <p className={`text-sm font-bold ${colorText}`}>{cat}</p>
+                      <p className="text-xl font-extrabold text-gray-800">{taxa.toFixed(0)}%</p>
+                      <div className="w-full bg-gray-100 rounded-full h-1.5 mt-1">
+                        <div className={`h-1.5 rounded-full ${colorBar}`} style={{ width: `${Math.min(taxa, 100)}%` }} />
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-1">{fmtNum(real)}h / {fmtNum(cap)}h</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Donut: distribuição das horas realizadas por vertical */}
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex flex-col">
+              <h3 className="text-base font-semibold text-gray-900 mb-1">Distribuição de Horas por Vertical</h3>
+              <p className="text-xs text-gray-400 mb-2">Baseado nas horas lançadas por categoria de cliente atendido</p>
+              <div className="flex-1 relative min-h-[220px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                      <Pie data={capacityPieData} cx="50%" cy="50%" innerRadius={120} outerRadius={180} fill="#8884d8" paddingAngle={5} dataKey="value">
-                          {capacityPieData.map((entry, index) => <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip formatter={(val: number) => `${fmtNum(val)}h`} />
-                      <Legend verticalAlign="bottom" height={36} />
+                    <Pie
+                      data={(['Executar', 'Saber', 'Ter'] as const)
+                        .map(cat => ({ name: cat, value: parseFloat((dashboard.hoursByVertical[cat] || 0).toFixed(1)) }))
+                        .filter(d => d.value > 0)}
+                      cx="50%" cy="50%"
+                      innerRadius={65} outerRadius={95}
+                      paddingAngle={4} dataKey="value"
+                    >
+                      {(['Executar', 'Saber', 'Ter'] as const).map(cat => (
+                        <Cell key={cat} fill={cat === 'Executar' ? '#b91c1c' : cat === 'Saber' ? '#d97706' : '#16a34a'} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => `${fmtNum(v)}h`} />
+                    <Legend verticalAlign="bottom" height={28} />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center">
-                  <span className="text-4xl font-bold text-gray-800">{fmtPct(dashboard.globalCapacityRate)}</span>
-                  <br/> <span className="text-gray-500 text-sm">Ocupado</span>
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+                  <span className="text-2xl font-bold text-gray-800">{fmtPct(dashboard.globalCapacityRate)}</span>
+                  <br /><span className="text-gray-500 text-xs">Ocupação Global</span>
                 </div>
-             </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -453,6 +520,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                           <div className="flex items-center">Nome <EmployeeSortIcon columnKey="name" /></div>
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Depto</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Verticais</th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleEmployeeSort('capacityHours')}>
                           <div className="flex items-center justify-end">Capacidade <EmployeeSortIcon columnKey="capacityHours" /></div>
                       </th>
@@ -472,6 +540,17 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                       <tr key={idx} className="hover:bg-gray-50">
                         <td className="px-6 py-4 text-sm font-medium text-gray-900">{emp.name}</td>
                         <td className="px-6 py-4 text-sm text-gray-500">{emp.department}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex gap-1 flex-wrap">
+                            {(emp.verticals || ['Executar']).map(v => (
+                              <span key={v} className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                v === 'Executar' ? 'bg-red-100 text-red-700' :
+                                v === 'Saber'    ? 'bg-yellow-100 text-yellow-700' :
+                                                   'bg-green-100 text-green-700'
+                              }`}>{v}</span>
+                            ))}
+                          </div>
+                        </td>
                         <td className="px-6 py-4 text-sm text-gray-500 text-right">{fmtNum(emp.capacityHours)}h</td>
                         <td className="px-6 py-4 text-sm text-gray-500 text-right">{fmtNum(emp.totalHours)}h</td>
                         <td className="px-6 py-4 text-sm text-gray-500 text-right">

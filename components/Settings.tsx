@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { EmployeeConfig, ClientConfig, DepartmentType, ClientCategory } from '../types';
+import { EmployeeConfig, ClientConfig, DepartmentType, ClientCategory, ClientCategory as Vertical } from '../types';
 import { Save, User, Briefcase, Plus, Archive, RefreshCw, Calendar, FileText, Loader, Upload, UserX } from 'lucide-react';
 import { extractContractData } from '../services/contractParser';
 
@@ -57,10 +57,24 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
     );
   }
 
+  const handleEmpVerticalToggle = (index: number, vertical: Vertical) => {
+    const newEmps = [...localEmps];
+    const emp = newEmps[index];
+    const current: Vertical[] = emp.verticals || ['Executar'];
+    const hasVertical = current.includes(vertical);
+    // Garante que o player tenha pelo menos 1 vertical
+    const updated = hasVertical
+        ? current.length > 1 ? current.filter(v => v !== vertical) : current
+        : [...current, vertical];
+    emp.verticals = updated;
+    setLocalEmps(newEmps);
+    setIsSaved(false);
+  };
+
   const handleEmpChange = (index: number, field: string, value: string) => {
     const newEmps = [...localEmps];
     const emp = newEmps[index];
-    
+
     if (field === 'department' || field === 'name' || field === 'startDate' || field === 'endDate') {
         // @ts-ignore
         emp[field] = value;
@@ -256,6 +270,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Departamento</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Verticais</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Início</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fim (Desligamento)</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -271,13 +286,37 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                   <tr key={idx}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{emp.name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <select 
+                        <select
                             className={INPUT_STYLE}
                             value={emp.department || 'Outros'}
                             onChange={(e) => handleEmpChange(idx, 'department', e.target.value)}
                         >
                             {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
                         </select>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                        {/* Multi-select de verticais: cada botão toggle independente */}
+                        <div className="flex gap-1">
+                          {(['Executar', 'Saber', 'Ter'] as Vertical[]).map(v => {
+                            const active = (emp.verticals || ['Executar']).includes(v);
+                            const colors: Record<string, string> = {
+                              Executar: active ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-600 border-red-300 hover:bg-red-50',
+                              Saber:    active ? 'bg-yellow-500 text-white border-yellow-500' : 'bg-white text-yellow-600 border-yellow-300 hover:bg-yellow-50',
+                              Ter:      active ? 'bg-green-600 text-white border-green-600' : 'bg-white text-green-600 border-green-300 hover:bg-green-50',
+                            };
+                            return (
+                              <button
+                                key={v}
+                                onClick={() => handleEmpVerticalToggle(idx, v)}
+                                className={`px-1.5 py-0.5 text-[10px] font-bold rounded border transition-colors ${colors[v]}`}
+                                title={`${active ? 'Remover' : 'Adicionar'} vertical ${v}`}
+                              >{v[0]}</button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[9px] text-gray-400 mt-0.5">
+                          {(emp.verticals || ['Executar']).join(', ')}
+                        </p>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <input

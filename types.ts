@@ -26,6 +26,7 @@ export interface EmployeeConfig {
   defaultHours: number;
   startDate?: string; // YYYY-MM-DD
   endDate?: string;   // YYYY-MM-DD
+  verticals?: ClientCategory[]; // Verticais em que o player atua (Saber, Ter, Executar)
   history: Record<string, MonthlyConfigEmp>; // key: "YYYY-MM"
 }
 
@@ -57,10 +58,11 @@ export interface ClientSummary {
 export interface EmployeeSummary {
   name: string;
   totalHours: number;
-  capacityHours: number; 
-  utilizationRate: number; 
+  capacityHours: number;
+  utilizationRate: number;
   costGenerated: number;
   department: string;
+  verticals: ClientCategory[]; // Verticais em que o player atua
 }
 
 export interface DepartmentSummary {
@@ -80,6 +82,10 @@ export interface DashboardSummary {
   totalCapacityHours: number;
   globalCapacityRate: number;
   revenueByCategory: Record<ClientCategory, number>;
+  // Horas realizadas distribuídas pela categoria do cliente atendido
+  hoursByVertical: Record<ClientCategory, number>;
+  // Capacidade total distribuída pelas verticais configuradas no player
+  capacityByVertical: Record<ClientCategory, number>;
 }
 
 export interface UserSession {

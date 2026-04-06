@@ -236,13 +236,16 @@ export const calculateSummary = (
   // 1. Calculate Costs
   const clientStats = new Map<string, { hours: number; cost: number }>();
   const empStats = new Map<string, { hours: number; cost: number }>();
-  
+
   let totalHoursRealizedGlobal = 0;
   let totalCostGlobal = 0;
 
+  // Horas realizadas agrupadas pela categoria do cliente atendido
+  const hoursByVertical: Record<ClientCategory, number> = { Saber: 0, Ter: 0, Executar: 0 };
+
   entries.forEach(entry => {
     const empConfig = empMap.get(entry.executor);
-    
+
     let hourlyRate = 0;
     if (empConfig) {
         const monthConfig = empConfig.history[entry.monthKey];
@@ -262,6 +265,10 @@ export const calculateSummary = (
     eStat.hours += entry.realizedDecimal;
     eStat.cost += taskCost;
     empStats.set(entry.executor, eStat);
+
+    // Atribui horas à vertical do cliente que foi atendido
+    const clientCat = clientMap.get(entry.workspace)?.category || 'Executar';
+    hoursByVertical[clientCat] += entry.realizedDecimal;
 
     totalHoursRealizedGlobal += entry.realizedDecimal;
     totalCostGlobal += taskCost;
@@ -353,6 +360,9 @@ export const calculateSummary = (
   const departments: DepartmentType[] = ['Criação', 'Atendimento', 'Gestão de Tráfego', 'Gestão', 'Outros'];
   departments.forEach(d => deptStats.set(d, { realized: 0, capacity: 0, count: 0 }));
 
+  // Capacidade total distribuída pelas verticais configuradas em cada player
+  const capacityByVertical: Record<ClientCategory, number> = { Saber: 0, Ter: 0, Executar: 0 };
+
   const allEmpNames = new Set([...empMap.keys(), ...empStats.keys()]);
 
   allEmpNames.forEach(name => {
@@ -389,13 +399,21 @@ export const calculateSummary = (
 
       if (totalCapacity === 0 && activeMonths.length === 0) totalCapacity = 160;
 
+      // Distribui capacidade do player pelas verticais configuradas (split igual entre verticais)
+      const playerVerticals: ClientCategory[] = config?.verticals?.length
+          ? config.verticals
+          : ['Executar']; // padrão: Executar se não configurado
+      const verticalShare = totalCapacity / playerVerticals.length;
+      playerVerticals.forEach(v => { capacityByVertical[v] += verticalShare; });
+
       employeeSummaries.push({
           name,
           totalHours: stat.hours,
           capacityHours: totalCapacity,
           utilizationRate: totalCapacity > 0 ? (stat.hours / totalCapacity) * 100 : 0,
           costGenerated: stat.cost,
-          department: dept
+          department: dept,
+          verticals: playerVerticals
       });
 
       const dStat = deptStats.get(dept)!;
@@ -438,7 +456,9 @@ export const calculateSummary = (
       totalHours: totalHoursRealizedGlobal,
       totalCapacityHours: totalCapacityGlobal,
       globalCapacityRate,
-      revenueByCategory
+      revenueByCategory,
+      hoursByVertical,
+      capacityByVertical
     }
   };
 };
