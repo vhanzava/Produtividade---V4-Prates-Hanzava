@@ -179,7 +179,7 @@ const App: React.FC = () => {
           const { data, error } = await supabase
             .from('app_state')
             .select('*')
-            .eq('user_email', session!.email)
+            .limit(1)
             .single();
 
           if (error) {
@@ -194,16 +194,14 @@ const App: React.FC = () => {
           }
 
           if (data) {
-              // data.data é o JSONB com entries/employees/clients
-              const payload = data.data || data;
-              const loadedEntries = (payload.entries || []).map((e: any) => ({
+              const loadedEntries = (data.entries || []).map((e: any) => ({
                   ...e,
                   date: new Date(e.date)
               }));
 
               setEntries(loadedEntries);
-              setEmployees(payload.employees || []);
-              setClients(payload.clients || []);
+              setEmployees(data.employees || []);
+              setClients(data.clients || []);
 
               if (loadedEntries.length > 0 && !startDate) {
                   const dates = loadedEntries.map((e: TimeEntry) => e.date.getTime());
@@ -245,10 +243,12 @@ const App: React.FC = () => {
           const { error } = await supabase
             .from('app_state')
             .upsert({
-                user_email: session!.email,
-                data: { entries: newEntries, employees: newEmps, clients: newClients },
+                id: 1,
+                entries: newEntries,
+                employees: newEmps,
+                clients: newClients,
                 updated_at: new Date().toISOString()
-            }, { onConflict: 'user_email' });
+            });
 
           if (error) throw error;
           
