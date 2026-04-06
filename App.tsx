@@ -161,8 +161,11 @@ const App: React.FC = () => {
               updated_at: new Date().toISOString()
           };
 
+          // === DEBUG LOGS (remover após diagnóstico) ===
+          console.log('[HS-SAVE] Iniciando save para:', input.clientId, '| mês:', input.monthKey);
+          console.log('[HS-SAVE] Usuário:', session?.email);
+
           // Estratégia robusta: UPDATE primeiro → se não atualizou nenhuma linha, INSERT
-          // Isso evita depender de constraint UNIQUE implícita no banco e é sempre explícito.
           const { data: updatedRows, error: updateError } = await supabase
             .from('health_inputs')
             .update(payload)
@@ -170,14 +173,18 @@ const App: React.FC = () => {
             .eq('month_key', input.monthKey)
             .select();
 
+          console.log('[HS-SAVE] UPDATE result → rows:', updatedRows?.length ?? 'null', '| error:', updateError?.message ?? 'none');
+
           if (updateError) throw updateError;
 
           if (!updatedRows || updatedRows.length === 0) {
-              // Nenhuma linha existia para esse client_id+month_key: INSERT
-              const { error: insertError } = await supabase
+              console.log('[HS-SAVE] Nenhuma linha atualizada → tentando INSERT...');
+              const { data: insertedRows, error: insertError } = await supabase
                 .from('health_inputs')
-                .insert(payload);
+                .insert(payload)
+                .select();
 
+              console.log('[HS-SAVE] INSERT result → rows:', insertedRows?.length ?? 'null', '| error:', insertError?.message ?? 'none');
               if (insertError) throw insertError;
           }
 
