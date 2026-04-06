@@ -1157,98 +1157,172 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
       )}
 
       {/* BACKLOG VIEW */}
-      {view === 'backlog' && !isEditing && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <History size={18} className="text-blue-600" />
-                Backlog de Alterações — Health Score
-              </h3>
-              <p className="text-xs text-gray-500 mt-0.5">Histórico completo de todos os updates registrados automaticamente pelo banco.</p>
+      {view === 'backlog' && !isEditing && (() => {
+        // Mapeamento de campo → label legível
+        const FIELD_LABELS: Record<string, string> = {
+          checkin: 'Check-in',
+          whatsapp: 'WhatsApp',
+          adimplencia: 'Adimplência',
+          recarga: 'Recarga',
+          roi_bucket: 'ROI',
+          growth: 'Crescimento',
+          engagement_vs_avg: 'Engajamento vs Média',
+          checkin_produtivo: 'Check-in Produtivo',
+          progresso: 'Progresso',
+          relacionamento_interno: 'Relacionamento',
+          aviso_previo: 'Aviso Prévio',
+          pesquisa_respondida: 'Pesquisa Respondida',
+          csat_tecnico: 'CSAT Técnico',
+          nps: 'NPS',
+          mhs: 'MHS',
+          pesquisa_geral_respondida: 'Pesquisa Geral',
+          results_focus: 'Foco de Resultado',
+          social_profile: 'Perfil Social',
+          espera_resultado_mensuravel: 'Espera Resultado Mensurável',
+          mensura_resultado_financeiro: 'Mensura Resultado Financeiro',
+          cliente_apto_pesquisa: 'Apto para Pesquisa',
+        };
+
+        // Mapeamento de valor interno → label legível
+        const VALUE_LABELS: Record<string, string> = {
+          semanal: 'Semanal', quinzenal: 'Quinzenal', mensal: 'Mensal', sem_frequencia: 'Sem Frequência',
+          na_hora: 'Na Hora', mesmo_dia: 'Mesmo Dia', dia_seguinte: 'Dia Seguinte',
+          dias_depois: 'Dias Depois', nao_responde: 'Não Responde',
+          em_dia: 'Em Dia', ate_10_dias: 'Até 10 dias', mais_30_dias: 'Mais 30 dias',
+          no_dia: 'No Dia',
+          roi_lt_3: 'ROI < 3x', roi_3: 'ROI = 3x', roi_2: 'ROI = 2x',
+          roi_1: 'ROI = 1x', roi_gt_1: 'ROI < 1x',
+          perfil_a_lt_50k: 'Perfil A (<50k)', perfil_b_gt_50k: 'Perfil B (>50k)',
+          growth_high: 'Crescimento Alto', growth_medium: 'Crescimento Médio',
+          growth_low: 'Crescimento Baixo', growth_negative: 'Crescimento Negativo',
+          negativo: 'Negativo',
+          alta_perf: 'Alta Performance', estavel: 'Estável', atencao: 'Atenção', critico: 'Crítico',
+          sim: 'Sim', parcial: 'Parcial', nao: 'Não',
+          muito: 'Muito',
+          melhorou: 'Melhorou', neutro: 'Neutro', piorou: 'Piorou',
+          gt_60_dias: '> 60 dias', '30_60_dias': '30–60 dias', lt_30_dias: '< 30 dias',
+          'gt_4.5': '> 4.5', ate_4: '≤ 4.0', ate_3_5: '≤ 3.5', lt_3: '< 3.0',
+          promotor: 'Promotor', detrator: 'Detrator',
+          muito_desapontado: 'Muito Desapontado', pouco: 'Pouco Desapontado',
+          indiferente: 'Indiferente', nada: 'Nada',
+          roi: 'ROI', social: 'Social', both: 'Ambos',
+          A: 'Perfil A', B: 'Perfil B',
+        };
+
+        const fmtVal = (v: any) => v == null ? '—' : (VALUE_LABELS[String(v)] ?? String(v));
+
+        const TRACK_FIELDS = Object.keys(FIELD_LABELS);
+
+        return (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <History size={18} className="text-blue-600" />
+                  Backlog de Alterações — Health Score
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">Histórico completo de todas as mudanças com autoria e valores anteriores.</p>
+              </div>
+              <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded font-medium">
+                {healthHistory.length} registros
+              </span>
             </div>
-            <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded font-medium">
-              {healthHistory.length} registros
-            </span>
+
+            {healthHistory.length === 0 ? (
+              <div className="p-12 text-center text-gray-400">
+                <History size={40} className="mx-auto mb-3 opacity-40" />
+                <p className="text-sm">Nenhuma alteração registrada ainda.</p>
+                <p className="text-xs mt-1">As mudanças aparecerão aqui após o próximo salvamento.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data/Hora</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Feito por</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mês</th>
+                      <th className="px-5 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">O que mudou</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {healthHistory.map((entry: any) => {
+                      // Detectar campos com diff e montar lista old→new
+                      const diffs: Array<{ field: string; oldVal: any; newVal: any }> = [];
+                      if (entry.old_values && entry.new_values) {
+                        TRACK_FIELDS.forEach(f => {
+                          const ov = entry.old_values[f];
+                          const nv = entry.new_values[f];
+                          if (ov !== nv) diffs.push({ field: f, oldVal: ov, newVal: nv });
+                        });
+                      }
+
+                      const changedAt = new Date(entry.changed_at);
+                      const dateLabel = changedAt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+                      const timeLabel = changedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+                      // Exibir email resumido (apenas parte antes do @)
+                      const authorEmail: string = entry.changed_by || '';
+                      const authorShort = authorEmail.includes('@') ? authorEmail.split('@')[0] : (authorEmail || '—');
+
+                      return (
+                        <tr key={entry.id} className="hover:bg-gray-50 transition-colors align-top">
+                          <td className="px-5 py-3 whitespace-nowrap text-gray-700 font-mono text-xs">
+                            {dateLabel}<br /><span className="text-gray-400">{timeLabel}</span>
+                          </td>
+                          <td className="px-5 py-3 whitespace-nowrap">
+                            <span
+                              className="text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded"
+                              title={authorEmail}
+                            >
+                              {authorShort}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 whitespace-nowrap font-medium text-gray-900 text-xs">{entry.client_id}</td>
+                          <td className="px-5 py-3 whitespace-nowrap text-gray-500 text-xs">{entry.month_key}</td>
+                          <td className="px-5 py-3 text-center whitespace-nowrap">
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                              entry.operation === 'INSERT'
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {entry.operation === 'INSERT' ? 'Criação' : 'Atualização'}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3">
+                            {entry.operation === 'INSERT' && diffs.length === 0 ? (
+                              <span className="text-xs italic text-gray-400">Avaliação inicial criada</span>
+                            ) : diffs.length > 0 ? (
+                              <div className="space-y-1">
+                                {diffs.map(({ field, oldVal, newVal }) => (
+                                  <div key={field} className="flex items-center gap-1.5 text-xs flex-wrap">
+                                    <span className="font-semibold text-gray-700">{FIELD_LABELS[field] ?? field}:</span>
+                                    <span className="bg-red-50 text-red-700 border border-red-200 px-1.5 py-0.5 rounded line-through">
+                                      {fmtVal(oldVal)}
+                                    </span>
+                                    <span className="text-gray-400">→</span>
+                                    <span className="bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded font-medium">
+                                      {fmtVal(newVal)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs italic text-gray-400">Metadados atualizados</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-
-          {healthHistory.length === 0 ? (
-            <div className="p-12 text-center text-gray-400">
-              <History size={40} className="mx-auto mb-3 opacity-40" />
-              <p className="text-sm">Nenhuma alteração registrada ainda.</p>
-              <p className="text-xs mt-1">As mudanças aparecerão aqui automaticamente após o próximo salvamento.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data/Hora</th>
-                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
-                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mês</th>
-                    <th className="px-5 py-3 text-center text-xs font-medium text-gray-500 uppercase">Operação</th>
-                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">Campos Alterados</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {healthHistory.map((entry: any) => {
-                    // Detectar quais campos mudaram entre old e new
-                    const changedFields: string[] = [];
-                    if (entry.operation === 'UPDATE' && entry.old_values && entry.new_values) {
-                      const trackFields = [
-                        'checkin','whatsapp','adimplencia','recarga',
-                        'roi_bucket','growth','engagement_vs_avg',
-                        'checkin_produtivo','progresso','relacionamento_interno',
-                        'aviso_previo','pesquisa_respondida',
-                        'csat_tecnico','nps','mhs','pesquisa_geral_respondida'
-                      ];
-                      trackFields.forEach(f => {
-                        if (entry.old_values[f] !== entry.new_values[f]) changedFields.push(f);
-                      });
-                    }
-
-                    const changedAt = new Date(entry.changed_at);
-                    const dateLabel = changedAt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
-                    const timeLabel = changedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-                    return (
-                      <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-5 py-3 whitespace-nowrap text-gray-700 font-mono text-xs">
-                          {dateLabel} <span className="text-gray-400">{timeLabel}</span>
-                        </td>
-                        <td className="px-5 py-3 whitespace-nowrap font-medium text-gray-900">{entry.client_id}</td>
-                        <td className="px-5 py-3 whitespace-nowrap text-gray-500">{entry.month_key}</td>
-                        <td className="px-5 py-3 text-center">
-                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                            entry.operation === 'INSERT'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-blue-100 text-blue-700'
-                          }`}>
-                            {entry.operation === 'INSERT' ? 'Criação' : 'Atualização'}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3 text-gray-500">
-                          {entry.operation === 'INSERT' ? (
-                            <span className="text-xs italic text-gray-400">Avaliação inicial criada</span>
-                          ) : changedFields.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {changedFields.map(f => (
-                                <span key={f} className="bg-gray-100 text-gray-600 text-xs px-1.5 py-0.5 rounded border border-gray-200">{f}</span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-xs italic text-gray-400">Metadados atualizados</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

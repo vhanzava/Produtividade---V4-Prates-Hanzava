@@ -113,6 +113,10 @@ const App: React.FC = () => {
   };
 
   const saveHealthInput = async (input: HealthInput) => {
+      // Captura estado anterior ANTES de atualizar o estado local
+      const oldInput = healthInputs[input.clientId] || null;
+      const isNewRecord = !oldInput;
+
       // Update local state immediately
       setHealthInputs(prev => ({ ...prev, [input.clientId]: input }));
 
@@ -142,7 +146,7 @@ const App: React.FC = () => {
               nps: input.nps,
               mhs: input.mhs,
               pesquisa_geral_respondida: input.pesquisa_geral_respondida,
-              
+
               // Metadata e qualificadores
               results_focus: input.results_focus,
               social_profile: input.social_profile,
@@ -157,13 +161,46 @@ const App: React.FC = () => {
               updated_at: new Date().toISOString()
           };
 
-          console.log("Saving payload to Supabase:", payload);
-
           const { error } = await supabase
             .from('health_inputs')
             .upsert(payload, { onConflict: 'client_id,month_key' });
 
           if (error) throw error;
+
+          // Registro manual no histórico com autoria e diff old→new
+          const TRACKED_FIELDS = [
+              'checkin','whatsapp','adimplencia','recarga',
+              'roi_bucket','growth','engagement_vs_avg',
+              'checkin_produtivo','progresso','relacionamento_interno',
+              'aviso_previo','pesquisa_respondida',
+              'csat_tecnico','nps','mhs','pesquisa_geral_respondida',
+              'results_focus','social_profile',
+              'espera_resultado_mensuravel','mensura_resultado_financeiro','cliente_apto_pesquisa'
+          ];
+
+          const buildSnapshot = (src: HealthInput | null) => {
+              if (!src) return null;
+              return TRACKED_FIELDS.reduce((acc, f) => {
+                  acc[f] = (src as any)[f] ?? null;
+                  return acc;
+              }, {} as Record<string, any>);
+          };
+
+          const historyEntry = {
+              operation: isNewRecord ? 'INSERT' : 'UPDATE',
+              client_id: input.clientId,
+              month_key: input.monthKey,
+              changed_by: session?.email || 'desconhecido',
+              old_values: buildSnapshot(oldInput),
+              new_values: buildSnapshot(input),
+              changed_at: new Date().toISOString()
+          };
+
+          const { error: histErr } = await supabase
+              .from('health_score_history')
+              .insert(historyEntry);
+
+          if (histErr) console.warn("Aviso: histórico não registrado:", histErr.message);
 
           // Re-sincroniza do banco para garantir que todos os usuários
           // vejam os dados mais recentes (evita divergência entre estado local e DB)
