@@ -164,6 +164,11 @@ const App: React.FC = () => {
             .upsert(payload, { onConflict: 'client_id,month_key' });
 
           if (error) throw error;
+
+          // Re-sincroniza do banco para garantir que todos os usuários
+          // vejam os dados mais recentes (evita divergência entre estado local e DB)
+          await fetchHealthInputs();
+          await fetchHealthHistory();
           setStatusMsg("Avaliação salva na nuvem!");
       } catch (err: any) {
           console.error("Erro ao salvar health input:", err);

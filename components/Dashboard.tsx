@@ -187,6 +187,59 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
             <KPICard title="Menor Margem" value={activeClientSummaries.length > 0 ? activeClientSummaries.sort((a,b) => a.margin - b.margin)[0].name : "N/A"} sub={activeClientSummaries.length > 0 ? fmtPct(activeClientSummaries.sort((a,b) => a.margin - b.margin)[0].margin) : "0%"} icon={AlertTriangle} color="bg-orange-500" />
             <KPICard title="Capacidade Geral" value={fmtPct(dashboard.globalCapacityRate)} sub="Ocupação" icon={Briefcase} color="bg-blue-600" />
           </div>
+
+          {/* Carteira por Categoria (Saber × Ter × Executar) */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {(['Executar', 'Saber', 'Ter'] as const).map((cat) => {
+              const catClients = activeClientSummaries.filter(c => c.category === cat);
+              const catRevenue = dashboard.revenueByCategory[cat];
+              const catCost = catClients.reduce((s, c) => s + c.operationalCost, 0);
+              const catProfit = catRevenue - catCost;
+              const catMargin = catRevenue > 0 ? (catProfit / catRevenue) * 100 : 0;
+              const inadimplentesCount = catClients.filter(c => c.is_inadimplente).length;
+              const colors: Record<string, { bg: string; bar: string; badge: string }> = {
+                Executar: { bg: 'bg-red-50 border-red-200', bar: 'bg-red-600', badge: 'bg-red-100 text-red-700' },
+                Saber:    { bg: 'bg-yellow-50 border-yellow-200', bar: 'bg-yellow-500', badge: 'bg-yellow-100 text-yellow-700' },
+                Ter:      { bg: 'bg-green-50 border-green-200', bar: 'bg-green-600', badge: 'bg-green-100 text-green-700' },
+              };
+              const c = colors[cat];
+              const totalRevAll = Object.values(dashboard.revenueByCategory).reduce((a, b) => a + b, 0);
+              const sharePct = totalRevAll > 0 ? (catRevenue / totalRevAll) * 100 : 0;
+              return (
+                <div key={cat} className={`bg-white rounded-lg shadow-sm border p-6 ${c.bg}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-base font-bold text-gray-800">{cat}</h3>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded ${c.badge}`}>
+                      {catClients.length} cliente{catClients.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="space-y-2 text-sm text-gray-600">
+                    <div className="flex justify-between"><span>Receita</span><span className="font-semibold text-gray-900">{fmt(catRevenue)}</span></div>
+                    <div className="flex justify-between"><span>Custo</span><span className="font-semibold text-gray-900">{fmt(catCost)}</span></div>
+                    <div className="flex justify-between"><span>Lucro</span><span className={`font-bold ${catProfit >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(catProfit)}</span></div>
+                    <div className="flex justify-between"><span>Margem</span><span className="font-semibold text-gray-900">{fmtPct(catMargin)}</span></div>
+                  </div>
+                  {/* Barra de participação na receita total */}
+                  <div className="mt-4">
+                    <div className="flex justify-between text-xs text-gray-400 mb-1">
+                      <span>Participação na Receita</span>
+                      <span>{sharePct.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className={`h-2 rounded-full ${c.bar}`} style={{ width: `${sharePct}%` }} />
+                    </div>
+                  </div>
+                  {inadimplentesCount > 0 && (
+                    <p className="mt-3 text-xs text-red-600 font-medium">
+                      ⚠ {inadimplentesCount} inadimplente{inadimplentesCount > 1 ? 's' : ''} — receita excluída do total
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Capacidade Global */}
           <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 flex flex-col items-center">
              <h3 className="text-xl font-medium leading-6 text-gray-900 mb-6 text-center">Utilização da Capacidade Global</h3>
              <div className="h-[500px] w-full max-w-2xl relative">
