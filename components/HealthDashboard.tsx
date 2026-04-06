@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { ClientConfig, HealthInput, HealthScoreResult, HealthFlagColor } from '../types';
 import { calculateHealthScore } from '../services/healthScoreCalculator';
-import { AlertTriangle, CheckCircle, XCircle, Activity, Save, ChevronRight, Clock, Calendar, LayoutGrid, List, DollarSign, Users } from 'lucide-react';
+import { AlertTriangle, CheckCircle, XCircle, Activity, Save, ChevronRight, Clock, Calendar, LayoutGrid, List, DollarSign, Users, History } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface HealthDashboardProps {
   clients: ClientConfig[];
   savedInputs: Record<string, HealthInput>;
-  allHealthInputs?: HealthInput[]; // Optional for backward compatibility if needed, but we'll pass it
+  allHealthInputs?: HealthInput[];
+  healthHistory?: any[]; // Registros de health_score_history do Supabase
   onSaveInput: (input: HealthInput) => void;
   canEdit: boolean;
 }
@@ -33,8 +34,8 @@ const INITIAL_INPUT: Omit<HealthInput, 'clientId' | 'monthKey'> = {
   mensura_resultado_financeiro: 'sim'
 };
 
-const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs, allHealthInputs = [], onSaveInput, canEdit }) => {
-  const [view, setView] = useState<'home' | 'list' | 'evolution' | 'kanban'>('home');
+const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs, allHealthInputs = [], healthHistory = [], onSaveInput, canEdit }) => {
+  const [view, setView] = useState<'home' | 'list' | 'evolution' | 'kanban' | 'backlog'>('home');
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<number>(6);
   const [isEditing, setIsEditing] = useState(false);
@@ -360,11 +361,17 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
             >
               <Activity size={16} /> Evolução
             </button>
-            <button 
+            <button
               onClick={() => setView('kanban')}
               className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-all ${view === 'kanban' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
             >
               <LayoutGrid size={16} className="rotate-90" /> Kanban
+            </button>
+            <button
+              onClick={() => setView('backlog')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-all ${view === 'backlog' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <History size={16} /> Backlog
             </button>
           </div>
         </div>
@@ -1132,13 +1139,13 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
           </div>
 
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3">
-            <button 
+            <button
               onClick={() => setIsEditing(false)}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
             >
               Cancelar
             </button>
-            <button 
+            <button
               onClick={handleSave}
               className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 flex items-center gap-2"
             >
@@ -1146,6 +1153,100 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
               Salvar Avaliação
             </button>
           </div>
+        </div>
+      )}
+
+      {/* BACKLOG VIEW */}
+      {view === 'backlog' && !isEditing && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <History size={18} className="text-blue-600" />
+                Backlog de Alterações — Health Score
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">Histórico completo de todos os updates registrados automaticamente pelo banco.</p>
+            </div>
+            <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded font-medium">
+              {healthHistory.length} registros
+            </span>
+          </div>
+
+          {healthHistory.length === 0 ? (
+            <div className="p-12 text-center text-gray-400">
+              <History size={40} className="mx-auto mb-3 opacity-40" />
+              <p className="text-sm">Nenhuma alteração registrada ainda.</p>
+              <p className="text-xs mt-1">As mudanças aparecerão aqui automaticamente após o próximo salvamento.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data/Hora</th>
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mês</th>
+                    <th className="px-5 py-3 text-center text-xs font-medium text-gray-500 uppercase">Operação</th>
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">Campos Alterados</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-100">
+                  {healthHistory.map((entry: any) => {
+                    // Detectar quais campos mudaram entre old e new
+                    const changedFields: string[] = [];
+                    if (entry.operation === 'UPDATE' && entry.old_values && entry.new_values) {
+                      const trackFields = [
+                        'checkin','whatsapp','adimplencia','recarga',
+                        'roi_bucket','growth','engagement_vs_avg',
+                        'checkin_produtivo','progresso','relacionamento_interno',
+                        'aviso_previo','pesquisa_respondida',
+                        'csat_tecnico','nps','mhs','pesquisa_geral_respondida'
+                      ];
+                      trackFields.forEach(f => {
+                        if (entry.old_values[f] !== entry.new_values[f]) changedFields.push(f);
+                      });
+                    }
+
+                    const changedAt = new Date(entry.changed_at);
+                    const dateLabel = changedAt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+                    const timeLabel = changedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+                    return (
+                      <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-5 py-3 whitespace-nowrap text-gray-700 font-mono text-xs">
+                          {dateLabel} <span className="text-gray-400">{timeLabel}</span>
+                        </td>
+                        <td className="px-5 py-3 whitespace-nowrap font-medium text-gray-900">{entry.client_id}</td>
+                        <td className="px-5 py-3 whitespace-nowrap text-gray-500">{entry.month_key}</td>
+                        <td className="px-5 py-3 text-center">
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                            entry.operation === 'INSERT'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {entry.operation === 'INSERT' ? 'Criação' : 'Atualização'}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-gray-500">
+                          {entry.operation === 'INSERT' ? (
+                            <span className="text-xs italic text-gray-400">Avaliação inicial criada</span>
+                          ) : changedFields.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {changedFields.map(f => (
+                                <span key={f} className="bg-gray-100 text-gray-600 text-xs px-1.5 py-0.5 rounded border border-gray-200">{f}</span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs italic text-gray-400">Metadados atualizados</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>

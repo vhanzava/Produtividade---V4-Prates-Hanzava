@@ -21,6 +21,7 @@ const App: React.FC = () => {
   const [clients, setClients] = useState<ClientConfig[]>([]);
   const [healthInputs, setHealthInputs] = useState<Record<string, HealthInput>>({});
   const [allHealthInputs, setAllHealthInputs] = useState<HealthInput[]>([]);
+  const [healthHistory, setHealthHistory] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'health' | 'settings'>('dashboard');
   const [currentModule, setCurrentModule] = useState<'none' | 'productivity' | 'health'>('none');
   
@@ -46,8 +47,23 @@ const App: React.FC = () => {
         }
         fetchCloudData();
         fetchHealthInputs();
+        fetchHealthHistory();
     }
   }, [session]); // isOfflineMode é constante, não precisa estar na dependência
+
+  const fetchHealthHistory = async () => {
+      try {
+          const { data, error } = await supabase
+              .from('health_score_history')
+              .select('*')
+              .order('changed_at', { ascending: false })
+              .limit(200);
+          if (error) throw error;
+          if (data) setHealthHistory(data);
+      } catch (err) {
+          console.error("Erro ao buscar histórico de health score:", err);
+      }
+  };
 
   const fetchHealthInputs = async () => {
       try {
@@ -127,9 +143,12 @@ const App: React.FC = () => {
               mhs: input.mhs,
               pesquisa_geral_respondida: input.pesquisa_geral_respondida,
               
-              // Metadata
+              // Metadata e qualificadores
               results_focus: input.results_focus,
               social_profile: input.social_profile,
+              espera_resultado_mensuravel: input.espera_resultado_mensuravel,
+              mensura_resultado_financeiro: input.mensura_resultado_financeiro,
+              cliente_apto_pesquisa: input.cliente_apto_pesquisa,
               last_updated_engagement: input.last_updated_engagement,
               last_updated_results: input.last_updated_results,
               last_updated_relationship: input.last_updated_relationship,
@@ -160,7 +179,7 @@ const App: React.FC = () => {
           const { data, error } = await supabase
             .from('app_state')
             .select('*')
-            .eq('id', 1)
+            .eq('user_email', session!.email)
             .single();
 
           if (error) {
@@ -175,14 +194,16 @@ const App: React.FC = () => {
           }
 
           if (data) {
-              const loadedEntries = (data.entries || []).map((e: any) => ({
+              // data.data é o JSONB com entries/employees/clients
+              const payload = data.data || data;
+              const loadedEntries = (payload.entries || []).map((e: any) => ({
                   ...e,
                   date: new Date(e.date)
               }));
-              
+
               setEntries(loadedEntries);
-              setEmployees(data.employees || []);
-              setClients(data.clients || []);
+              setEmployees(payload.employees || []);
+              setClients(payload.clients || []);
 
               if (loadedEntries.length > 0 && !startDate) {
                   const dates = loadedEntries.map((e: TimeEntry) => e.date.getTime());
@@ -224,12 +245,10 @@ const App: React.FC = () => {
           const { error } = await supabase
             .from('app_state')
             .upsert({
-                id: 1,
-                entries: newEntries,
-                employees: newEmps,
-                clients: newClients,
+                user_email: session!.email,
+                data: { entries: newEntries, employees: newEmps, clients: newClients },
                 updated_at: new Date().toISOString()
-            });
+            }, { onConflict: 'user_email' });
 
           if (error) throw error;
           
@@ -549,12 +568,13 @@ const App: React.FC = () => {
               )
             )
         ) : (
-            <HealthDashboard 
-              clients={clients} 
-              savedInputs={healthInputs} 
-              allHealthInputs={allHealthInputs} 
-              onSaveInput={saveHealthInput} 
-              canEdit={session.permissions?.canEditHealthScore ?? session.isMaster} 
+            <HealthDashboard
+              clients={clients}
+              savedInputs={healthInputs}
+              allHealthInputs={allHealthInputs}
+              healthHistory={healthHistory}
+              onSaveInput={saveHealthInput}
+              canEdit={session.permissions?.canEditHealthScore ?? session.isMaster}
             />
         )}
       </main>

@@ -384,6 +384,9 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Setup (One-Time)
                     </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Inadimplente
+                    </th>
                     </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -468,6 +471,20 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     onChange={(e) => handleClientChange(realIndex, 'oneTimeFee', e.target.value)}
                                     placeholder="0.00"
                                 />
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                                {/* Receita excluída do lucro real quando marcado */}
+                                <button
+                                    onClick={() => handleClientChange(realIndex, 'is_inadimplente', !client.is_inadimplente)}
+                                    title={client.is_inadimplente ? 'Inadimplente: receita excluída do lucro' : 'Adimplente'}
+                                    className={`px-2 py-1 rounded text-xs font-semibold border transition-colors ${
+                                        client.is_inadimplente
+                                            ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200'
+                                            : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                    }`}
+                                >
+                                    {client.is_inadimplente ? 'Inadimplente' : 'Adimplente'}
+                                </button>
                             </td>
                         </tr>
                     )})}

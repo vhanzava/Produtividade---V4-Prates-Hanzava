@@ -343,6 +343,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             {client.name}
                             {!client.isActive && <span className="ml-2 text-[10px] bg-gray-200 text-gray-600 px-1 rounded">Inativo</span>}
+                            {client.is_inadimplente && <span className="ml-2 text-[10px] bg-red-100 text-red-700 border border-red-200 px-1 rounded">Inadimplente</span>}
                         </td>
                         <td className="px-6 py-4 text-center">
                             <span className={`px-2 py-1 rounded text-xs border ${

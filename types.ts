@@ -36,7 +36,8 @@ export interface ClientConfig {
   defaultFee: number;
   oneTimeFee?: number; // Valor de Implementação/Setup
   contractStartDate?: string; // YYYY-MM-DD
-  accountManager?: string; // New field for Health Score
+  accountManager?: string;
+  is_inadimplente?: boolean; // Exclui receita do lucro real quando true
   history: Record<string, number>; // key: "YYYY-MM", value: fee
 }
 
@@ -50,6 +51,7 @@ export interface ClientSummary {
   margin: number;
   isActive: boolean;
   category: ClientCategory;
+  is_inadimplente: boolean; // Receita excluída do total real quando true
 }
 
 export interface EmployeeSummary {

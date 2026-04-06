@@ -321,22 +321,28 @@ export const calculateSummary = (
     if (stat.hours > 0 || totalFee > 0 || config) {
         const grossProfit = totalFee - stat.cost;
         const margin = totalFee > 0 ? (grossProfit / totalFee) * 100 : 0;
+        const isInadimplente = !!(config?.is_inadimplente);
 
         clientSummaries.push({
             name,
             totalHours: stat.hours,
             operationalCost: stat.cost,
-            monthlyFee: totalFee, 
+            monthlyFee: totalFee,
             oneTimeFee: realizedOneTimeFee,
             grossProfit,
             margin,
             isActive,
-            category
+            category,
+            is_inadimplente: isInadimplente
         });
 
+        // Inadimplentes: custo ainda é contabilizado, mas receita é excluída
+        // do total real para não distorcer a lucratividade do período.
         if (isActive || totalFee > 0) {
-            totalRevenueGlobal += totalFee;
-            revenueByCategory[category] += totalFee;
+            if (!isInadimplente) {
+                totalRevenueGlobal += totalFee;
+                revenueByCategory[category] += totalFee;
+            }
         }
     }
   });
