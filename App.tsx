@@ -70,6 +70,12 @@ const App: React.FC = () => {
           const { data, error } = await supabase.from('health_inputs').select('*').order('month_key', { ascending: true });
           if (error) throw error;
           if (data) {
+              console.log('[HS-FETCH] Total linhas recebidas do banco:', data.length);
+              // Log de clientes com múltiplas entradas (possível causa de conflito)
+              const counts: Record<string, number> = {};
+              data.forEach((r: any) => { counts[r.client_id] = (counts[r.client_id] || 0) + 1; });
+              const duplicates = Object.entries(counts).filter(([, c]) => c > 1);
+              if (duplicates.length > 0) console.warn('[HS-FETCH] ⚠️ Clientes com múltiplas linhas:', duplicates);
               const allInputs: HealthInput[] = data.map((row: any) => ({
                   clientId: row.client_id,
                   monthKey: row.month_key,
@@ -174,6 +180,16 @@ const App: React.FC = () => {
             .select();
 
           console.log('[HS-SAVE] UPDATE result → rows:', updatedRows?.length ?? 'null', '| error:', updateError?.message ?? 'none');
+          if (updatedRows && updatedRows.length > 0) {
+              console.log('[HS-SAVE] Dados gravados no banco (amostra):', {
+                  client_id: updatedRows[0].client_id,
+                  month_key: updatedRows[0].month_key,
+                  checkin: updatedRows[0].checkin,
+                  aviso_previo: updatedRows[0].aviso_previo,
+                  nps: updatedRows[0].nps,
+                  updated_at: updatedRows[0].updated_at,
+              });
+          }
 
           if (updateError) throw updateError;
 
@@ -187,6 +203,14 @@ const App: React.FC = () => {
               console.log('[HS-SAVE] INSERT result → rows:', insertedRows?.length ?? 'null', '| error:', insertError?.message ?? 'none');
               if (insertError) throw insertError;
           }
+
+          // Verificação imediata: re-lê do banco para confirmar que o dado persistiu
+          const { data: verifyRows } = await supabase
+              .from('health_inputs')
+              .select('client_id, month_key, checkin, aviso_previo, nps, updated_at')
+              .eq('client_id', input.clientId)
+              .eq('month_key', input.monthKey);
+          console.log('[HS-VERIFY] Leitura imediata do banco após save:', verifyRows);
 
           // Registro manual no histórico com autoria e diff old→new
           const TRACKED_FIELDS = [
