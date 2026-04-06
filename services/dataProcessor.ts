@@ -368,43 +368,58 @@ export const calculateSummary = (
   allEmpNames.forEach(name => {
       const stat = empStats.get(name) || { hours: 0, cost: 0 };
       const config = empMap.get(name);
-      
+
       let totalCapacity = 0;
       let dept: string = 'Outros';
 
+      const playerVerticals: ClientCategory[] = config?.verticals?.length
+          ? config.verticals
+          : ['Executar'];
+      const vertHours = config?.verticalHours || {};
+      // Usa horas manuais se pelo menos uma vertical do player tiver valor configurado
+      const useManual = playerVerticals.some(v => (vertHours[v] ?? 0) > 0);
+
       if (config) {
           dept = config.department;
-          activeMonths.forEach(m => {
-             const [y, month] = m.split('-').map(Number);
-             const monthStart = new Date(y, month - 1, 1);
-             const monthEnd = new Date(y, month, 0);
-             const totalWorkingDays = countWorkingDays(monthStart, monthEnd);
-             const monthlyCap = totalWorkingDays * 8; // Dynamic capacity: 8h * working days
 
-             const ratio = getProRataRatio(m, config.startDate, config.endDate);
-             totalCapacity += monthlyCap * ratio;
-          });
+          if (useManual) {
+              // Capacidade manual: horas mensais por vertical × proRata do período
+              activeMonths.forEach(m => {
+                  const ratio = getProRataRatio(m, config.startDate, config.endDate);
+                  playerVerticals.forEach(v => {
+                      const monthlyH = vertHours[v] ?? 0;
+                      const contribution = monthlyH * ratio;
+                      capacityByVertical[v] += contribution;
+                      totalCapacity += contribution;
+                  });
+              });
+          } else {
+              // Auto: 8h × dias úteis, dividido igualmente entre verticais
+              activeMonths.forEach(m => {
+                  const [y, month] = m.split('-').map(Number);
+                  const monthStart = new Date(y, month - 1, 1);
+                  const monthEnd = new Date(y, month, 0);
+                  const monthlyCap = countWorkingDays(monthStart, monthEnd) * 8;
+                  const ratio = getProRataRatio(m, config.startDate, config.endDate);
+                  totalCapacity += monthlyCap * ratio;
+              });
+              const share = totalCapacity / playerVerticals.length;
+              playerVerticals.forEach(v => { capacityByVertical[v] += share; });
+          }
       } else {
+          // Sem config: auto sem pro-rata de datas
           activeMonths.forEach(m => {
-            const [y, month] = m.split('-').map(Number);
-            const monthStart = new Date(y, month - 1, 1);
-            const monthEnd = new Date(y, month, 0);
-            const totalWorkingDays = countWorkingDays(monthStart, monthEnd);
-            const monthlyCap = totalWorkingDays * 8;
-
-            const ratio = getProRataRatio(m);
-            totalCapacity += monthlyCap * ratio;
+              const [y, month] = m.split('-').map(Number);
+              const monthStart = new Date(y, month - 1, 1);
+              const monthEnd = new Date(y, month, 0);
+              const monthlyCap = countWorkingDays(monthStart, monthEnd) * 8;
+              totalCapacity += monthlyCap * getProRataRatio(m);
           });
+          const share = totalCapacity / playerVerticals.length;
+          playerVerticals.forEach(v => { capacityByVertical[v] += share; });
       }
 
       if (totalCapacity === 0 && activeMonths.length === 0) totalCapacity = 160;
-
-      // Distribui capacidade do player pelas verticais configuradas (split igual entre verticais)
-      const playerVerticals: ClientCategory[] = config?.verticals?.length
-          ? config.verticals
-          : ['Executar']; // padrão: Executar se não configurado
-      const verticalShare = totalCapacity / playerVerticals.length;
-      playerVerticals.forEach(v => { capacityByVertical[v] += verticalShare; });
 
       employeeSummaries.push({
           name,

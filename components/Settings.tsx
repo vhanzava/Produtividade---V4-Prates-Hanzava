@@ -62,11 +62,24 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
     const emp = newEmps[index];
     const current: Vertical[] = emp.verticals || ['Executar'];
     const hasVertical = current.includes(vertical);
-    // Garante que o player tenha pelo menos 1 vertical
-    const updated = hasVertical
-        ? current.length > 1 ? current.filter(v => v !== vertical) : current
-        : [...current, vertical];
-    emp.verticals = updated;
+    if (hasVertical && current.length === 1) return; // mínimo 1 vertical
+    if (hasVertical) {
+        emp.verticals = current.filter(v => v !== vertical);
+        // Remove as horas configuradas para a vertical removida
+        if (emp.verticalHours) delete emp.verticalHours[vertical];
+    } else {
+        emp.verticals = [...current, vertical];
+    }
+    setLocalEmps(newEmps);
+    setIsSaved(false);
+  };
+
+  const handleEmpVerticalHours = (index: number, vertical: Vertical, value: string) => {
+    const newEmps = [...localEmps];
+    const emp = newEmps[index];
+    if (!emp.verticalHours) emp.verticalHours = {};
+    const parsed = parseFloat(value);
+    emp.verticalHours[vertical] = isNaN(parsed) || parsed < 0 ? 0 : parsed;
     setLocalEmps(newEmps);
     setIsSaved(false);
   };
@@ -294,29 +307,46 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                             {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
                         </select>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                        {/* Multi-select de verticais: cada botão toggle independente */}
-                        <div className="flex gap-1">
-                          {(['Executar', 'Saber', 'Ter'] as Vertical[]).map(v => {
-                            const active = (emp.verticals || ['Executar']).includes(v);
-                            const colors: Record<string, string> = {
-                              Executar: active ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-600 border-red-300 hover:bg-red-50',
-                              Saber:    active ? 'bg-yellow-500 text-white border-yellow-500' : 'bg-white text-yellow-600 border-yellow-300 hover:bg-yellow-50',
-                              Ter:      active ? 'bg-green-600 text-white border-green-600' : 'bg-white text-green-600 border-green-300 hover:bg-green-50',
-                            };
-                            return (
+                    <td className="px-4 py-3" style={{minWidth: '220px'}}>
+                      {/* Por vertical ativa: badge toggle + input de horas mensais */}
+                      <div className="space-y-1.5">
+                        {(['Executar', 'Saber', 'Ter'] as Vertical[]).map(v => {
+                          const active = (emp.verticals || ['Executar']).includes(v);
+                          const vh = emp.verticalHours?.[v] ?? '';
+                          const palette = {
+                            Executar: { on: 'bg-red-600 text-white', off: 'bg-gray-100 text-gray-400', ring: 'focus:ring-red-400', border: 'border-red-200' },
+                            Saber:    { on: 'bg-yellow-500 text-white', off: 'bg-gray-100 text-gray-400', ring: 'focus:ring-yellow-400', border: 'border-yellow-200' },
+                            Ter:      { on: 'bg-green-600 text-white', off: 'bg-gray-100 text-gray-400', ring: 'focus:ring-green-400', border: 'border-green-200' },
+                          }[v];
+                          return (
+                            <div key={v} className="flex items-center gap-2">
+                              {/* Toggle */}
                               <button
-                                key={v}
                                 onClick={() => handleEmpVerticalToggle(idx, v)}
-                                className={`px-1.5 py-0.5 text-[10px] font-bold rounded border transition-colors ${colors[v]}`}
-                                title={`${active ? 'Remover' : 'Adicionar'} vertical ${v}`}
-                              >{v[0]}</button>
-                            );
-                          })}
-                        </div>
-                        <p className="text-[9px] text-gray-400 mt-0.5">
-                          {(emp.verticals || ['Executar']).join(', ')}
-                        </p>
+                                className={`w-16 text-[10px] font-bold py-0.5 rounded border transition-colors ${active ? palette.on + ' border-transparent' : palette.off + ' border-gray-200 hover:bg-gray-200'}`}
+                                title={active ? `Remover ${v}` : `Adicionar ${v}`}
+                              >{v}</button>
+                              {/* Input de horas — só aparece quando a vertical está ativa */}
+                              {active && (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    placeholder="Auto"
+                                    value={vh}
+                                    onChange={e => handleEmpVerticalHours(idx, v, e.target.value)}
+                                    className={`w-16 text-xs text-center border rounded px-1 py-0.5 bg-white focus:outline-none focus:ring-1 ${palette.ring} ${palette.border}`}
+                                  />
+                                  <span className="text-[10px] text-gray-400">h/mês</span>
+                                </div>
+                              )}
+                              {active && !vh && (
+                                <span className="text-[9px] text-gray-400 italic">8h/dia úteis</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <input
