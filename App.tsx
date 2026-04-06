@@ -161,11 +161,18 @@ const App: React.FC = () => {
               updated_at: new Date().toISOString()
           };
 
-          const { error } = await supabase
+          const { data: savedRows, error } = await supabase
             .from('health_inputs')
-            .upsert(payload, { onConflict: 'client_id,month_key' });
+            .upsert(payload, { onConflict: 'client_id,month_key' })
+            .select();
 
           if (error) throw error;
+
+          // Detecta silent failure: upsert "succeeded" mas nenhuma linha foi escrita
+          // (acontece quando a política RLS bloqueia a operação sem retornar erro)
+          if (savedRows !== null && savedRows.length === 0) {
+              throw new Error('Sem permissão para salvar (RLS bloqueou a escrita). Contacte o administrador.');
+          }
 
           // Registro manual no histórico com autoria e diff old→new
           const TRACKED_FIELDS = [
@@ -202,9 +209,26 @@ const App: React.FC = () => {
 
           if (histErr) console.warn("Aviso: histórico não registrado:", histErr.message);
 
-          // Re-sincroniza do banco para garantir que todos os usuários
-          // vejam os dados mais recentes (evita divergência entre estado local e DB)
-          await fetchHealthInputs();
+          // Atualiza allHealthInputs diretamente sem re-fetch completo.
+          // Isso evita que o fetchHealthInputs() sobrescreva o update otimista
+          // com dados potencialmente stale do banco (causa do "snap-back").
+          setAllHealthInputs(prev => {
+              const idx = prev.findIndex(
+                  i => i.clientId === input.clientId && i.monthKey === input.monthKey
+              );
+              if (idx >= 0) {
+                  const updated = [...prev];
+                  updated[idx] = input;
+                  return updated;
+              }
+              return [...prev, input];
+          });
+
+          // Re-assert o estado otimista (garante que healthInputs não seja
+          // sobrescrito por nenhum setState pendente de renders anteriores)
+          setHealthInputs(prev => ({ ...prev, [input.clientId]: input }));
+
+          // Busca apenas o histórico (não re-fetcha health_inputs para evitar snap-back)
           await fetchHealthHistory();
           setStatusMsg("Avaliação salva na nuvem!");
       } catch (err: any) {
