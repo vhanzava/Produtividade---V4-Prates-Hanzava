@@ -806,7 +806,7 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
                           <div className="flex items-center gap-1 text-orange-800 mb-0.5 text-xs">
                             Pesquisas
                             {score.breakdown.surveys === 0 && savedInputs[client.name]?.cliente_apto_pesquisa !== 'nao' && (
-                              <AlertTriangle size={11} className="text-red-500" title="Pontuação zerada — verifique dados salvos" />
+                              <AlertTriangle size={11} className="text-red-500" />
                             )}
                           </div>
                           <span className={`font-bold ${score.breakdown.surveys === 0 && savedInputs[client.name]?.cliente_apto_pesquisa !== 'nao' ? 'text-red-600' : 'text-orange-900'}`}>{score.breakdown.surveys}</span>
