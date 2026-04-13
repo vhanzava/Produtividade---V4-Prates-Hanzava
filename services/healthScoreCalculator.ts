@@ -60,9 +60,9 @@ const calculateLifetimeMonths = (startDateStr?: string): number => {
 };
 
 const getFlag = (score: number): { color: HealthFlagColor; action: string } => {
-  if (score >= 81) return { color: 'Green', action: 'Saudável, foco em Upsell' };
-  if (score >= 51) return { color: 'Yellow', action: 'Atenção, gargalos operacionais' };
-  if (score >= 26) return { color: 'Red', action: 'Risco Crítico, intervenção da Coordenação' };
+  if (score >= 75) return { color: 'Green', action: 'Saudável, foco em Upsell' };
+  if (score >= 46) return { color: 'Yellow', action: 'Atenção, gargalos operacionais' };
+  if (score >= 21) return { color: 'Red', action: 'Risco Crítico, intervenção da Coordenação' };
   return { color: 'Black', action: 'Churn iminente, prioridade máxima' };
 };
 

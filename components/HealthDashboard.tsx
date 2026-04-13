@@ -232,34 +232,27 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
       
       checkBiWeekly(input.last_updated_results, 'Resultados');
 
-      // 4. Surveys (Quarterly - Jan, Apr, Jul, Oct)
-      const checkQuarterly = (lastDateStr: string | undefined, verticalName: string) => {
+      // 4. Surveys (Monthly)
+      const checkMonthly = (lastDateStr: string | undefined, verticalName: string) => {
           let nextDue = new Date();
           if (lastDateStr) {
               const lastDate = new Date(lastDateStr);
-              const month = lastDate.getMonth(); // 0-11
-              const year = lastDate.getFullYear();
-              
-              // Quarters start at 0 (Jan), 3 (Apr), 6 (Jul), 9 (Oct)
-              // Find current quarter start month
-              const currentQuarterStart = Math.floor(month / 3) * 3;
-              
-              // Next due is the start of the NEXT quarter
-              nextDue = new Date(year, currentQuarterStart + 3, 1);
+              // Next due: 1st of the month following the last update
+              nextDue = new Date(lastDate.getFullYear(), lastDate.getMonth() + 1, 1);
           } else {
               nextDue = now;
           }
 
           pending.push({
               client: c,
-              type: 'Trimestral',
+              type: 'Mensal',
               vertical: verticalName,
               dueDate: nextDue,
               status: checkStatus(nextDue)
           });
       };
 
-      checkQuarterly(input.last_updated_surveys, 'Pesquisas');
+      checkMonthly(input.last_updated_surveys, 'Pesquisas');
 
     });
     
@@ -698,10 +691,10 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
       {view === 'kanban' && !isEditing && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 h-full overflow-x-auto pb-4">
           {[
-            { id: 'Green', label: 'Saudável', range: '81-100', color: 'bg-green-50 border-green-200', header: 'text-green-800' },
-            { id: 'Yellow', label: 'Atenção', range: '51-80', color: 'bg-yellow-50 border-yellow-200', header: 'text-yellow-800' },
-            { id: 'Red', label: 'Risco', range: '26-50', color: 'bg-red-50 border-red-200', header: 'text-red-800' },
-            { id: 'Black', label: 'Churn', range: '0-25', color: 'bg-gray-100 border-gray-200', header: 'text-gray-800' }
+            { id: 'Green', label: 'Saudável', range: '75-100', color: 'bg-green-50 border-green-200', header: 'text-green-800' },
+            { id: 'Yellow', label: 'Atenção', range: '46-74', color: 'bg-yellow-50 border-yellow-200', header: 'text-yellow-800' },
+            { id: 'Red', label: 'Risco', range: '21-45', color: 'bg-red-50 border-red-200', header: 'text-red-800' },
+            { id: 'Black', label: 'Churn', range: '0-20', color: 'bg-gray-100 border-gray-200', header: 'text-gray-800' }
           ].map(column => {
             const columnClients = activeClients
                 .filter(c => (scores[c.name]?.flag || 'Black') === column.id)
@@ -809,9 +802,14 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
                           <span className="text-purple-800 block mb-0.5">Relacionamento</span>
                           <span className="font-bold text-purple-900">{score.breakdown.relationship}</span>
                         </div>
-                        <div className="bg-orange-50 p-1.5 rounded border border-orange-100">
-                          <span className="text-orange-800 block mb-0.5">Pesquisas</span>
-                          <span className="font-bold text-orange-900">{score.breakdown.surveys}</span>
+                        <div className={`p-1.5 rounded border ${score.breakdown.surveys === 0 && savedInputs[client.name]?.cliente_apto_pesquisa !== 'nao' ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-100'}`}>
+                          <div className="flex items-center gap-1 text-orange-800 mb-0.5 text-xs">
+                            Pesquisas
+                            {score.breakdown.surveys === 0 && savedInputs[client.name]?.cliente_apto_pesquisa !== 'nao' && (
+                              <AlertTriangle size={11} className="text-red-500" title="Pontuação zerada — verifique dados salvos" />
+                            )}
+                          </div>
+                          <span className={`font-bold ${score.breakdown.surveys === 0 && savedInputs[client.name]?.cliente_apto_pesquisa !== 'nao' ? 'text-red-600' : 'text-orange-900'}`}>{score.breakdown.surveys}</span>
                         </div>
                       </div>
                       <div className="mt-3 pt-3 border-t border-gray-100">
@@ -1131,6 +1129,28 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
                           {label: 'Sim', value: 'sim'},
                           {label: 'Não', value: 'nao'}
                         ]} />
+
+                        {/* Diagnóstico: exibe pontuação ao vivo por campo */}
+                        {liveScore && (
+                          <div className={`mt-2 p-3 rounded-lg border text-xs ${liveScore.breakdown.surveys === 0 ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200'}`}>
+                            <p className="font-bold text-orange-900 mb-2">
+                              Pontuação desta vertical (ao vivo): <span className={liveScore.breakdown.surveys === 0 ? 'text-red-600' : 'text-orange-700'}>{liveScore.breakdown.surveys} pts</span>
+                            </p>
+                            {liveScore.breakdown.surveys === 0 && (
+                              <div className="mt-1 p-2 bg-red-100 rounded border border-red-300">
+                                <p className="font-bold text-red-800 flex items-center gap-1">
+                                  <AlertTriangle size={13} /> Diagnóstico: pontuação zerada com cliente apto
+                                </p>
+                                <p className="text-red-700 mt-1">
+                                  Possíveis causas: (1) campos CSAT/NPS/MHS não salvos corretamente no banco — verifique se os valores foram persistidos após o último save. (2) Dados de registro anterior incompatíveis com a estrutura atual.
+                                </p>
+                                <p className="text-red-600 font-semibold mt-1">
+                                  Ação: reavalie e salve novamente para sobrescrever os dados com os valores atuais do formulário.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                   )}
                 </div>
