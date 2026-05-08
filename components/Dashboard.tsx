@@ -90,8 +90,8 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
   });
 
   const sortedEmployees = [...activeEmployeeSummaries].sort((a, b) => {
-      const valA = a[employeeSortConfig.key];
-      const valB = b[employeeSortConfig.key];
+      const valA = a[employeeSortConfig.key] ?? '';
+      const valB = b[employeeSortConfig.key] ?? '';
       if (valA < valB) return employeeSortConfig.direction === 'asc' ? -1 : 1;
       if (valA > valB) return employeeSortConfig.direction === 'asc' ? 1 : -1;
       return 0;
