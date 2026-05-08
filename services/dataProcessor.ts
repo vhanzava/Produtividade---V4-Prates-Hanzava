@@ -433,7 +433,8 @@ export const calculateSummary = (
           utilizationRate: totalCapacity > 0 ? (stat.hours / totalCapacity) * 100 : 0,
           costGenerated: stat.cost,
           department: dept,
-          verticals: playerVerticals
+          verticals: playerVerticals,
+          endDate: config?.endDate
       });
 
       const dStat = deptStats.get(dept)!;

@@ -67,6 +67,7 @@ export interface EmployeeSummary {
   costGenerated: number;
   department: string;
   verticals: ClientCategory[]; // Verticais em que o player atua
+  endDate?: string; // YYYY-MM-DD — preenchido quando colaborador saiu
 }
 
 export interface DepartmentSummary {

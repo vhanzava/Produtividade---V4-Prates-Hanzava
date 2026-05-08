@@ -32,11 +32,36 @@ const INPUT_STYLE = "bg-gray-700 text-white border-gray-600 rounded-md shadow-sm
 const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmployees, onUpdateClients, canEdit = true }) => {
   const [activeTab, setActiveTab] = useState<'employees' | 'clients'>('employees');
   const [selectedMonth, setSelectedMonth] = useState<string>('default');
-  
+
   const [localEmps, setLocalEmps] = useState(employees);
   const [localClients, setLocalClients] = useState(clients);
   const [isSaved, setIsSaved] = useState(false);
-  
+
+  // Churn flow
+  const [showInactive, setShowInactive] = useState(false);
+  const [churnTarget, setChurnTarget] = useState<number | null>(null); // index being churned
+  const [churnDate, setChurnDate] = useState<string>(new Date().toISOString().slice(0, 10));
+
+  const isChurned = (emp: EmployeeConfig): boolean => {
+    if (!emp.endDate) return false;
+    return new Date(emp.endDate + 'T00:00:00') <= new Date();
+  };
+
+  const handleChurnConfirm = (idx: number) => {
+    const newEmps = [...localEmps];
+    newEmps[idx] = { ...newEmps[idx], endDate: churnDate };
+    setLocalEmps(newEmps);
+    setChurnTarget(null);
+    setIsSaved(false);
+  };
+
+  const handleReativar = (idx: number) => {
+    const newEmps = [...localEmps];
+    newEmps[idx] = { ...newEmps[idx], endDate: '' };
+    setLocalEmps(newEmps);
+    setIsSaved(false);
+  };
+
   // Loading state for PDF parsing
   const [processingClientIndex, setProcessingClientIndex] = useState<number | null>(null);
 
@@ -278,6 +303,25 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
 
         {activeTab === 'employees' ? (
           <div className="overflow-x-auto">
+            {/* Filtro: ativos / todos */}
+            <div className="flex items-center justify-between px-2 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 font-medium">
+                  {localEmps.filter(e => !isChurned(e)).length} ativo(s)
+                  {localEmps.filter(e => isChurned(e)).length > 0 && (
+                    <> · <span className="text-red-500">{localEmps.filter(e => isChurned(e)).length} desligado(s)</span></>
+                  )}
+                </span>
+              </div>
+              {localEmps.some(e => isChurned(e)) && (
+                <button
+                  onClick={() => setShowInactive(v => !v)}
+                  className={`text-xs px-2 py-1 rounded border transition-colors ${showInactive ? 'bg-gray-700 text-white border-gray-700' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                >
+                  {showInactive ? 'Ocultar desligados' : 'Mostrar desligados'}
+                </button>
+              )}
+            </div>
             <table className="min-w-full divide-y divide-gray-200">
               <thead>
                 <tr>
@@ -285,19 +329,32 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Departamento</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Verticais</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Início</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fim (Desligamento)</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Saída</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Custo Mensal {selectedMonth !== 'default' && '(Exceção)'}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Capacidade (Auto)
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ação</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {localEmps.map((emp, idx) => (
-                  <tr key={idx}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{emp.name}</td>
+                {localEmps.map((emp, idx) => {
+                  const churned = isChurned(emp);
+                  if (churned && !showInactive) return null;
+                  return (
+                  <tr key={idx} className={churned ? 'bg-gray-50 opacity-70' : ''}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <div className="flex flex-col gap-1">
+                        <span>{emp.name}</span>
+                        {churned && emp.endDate && (
+                          <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded w-fit font-medium">
+                            Saiu em {new Date(emp.endDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <select
                             className={INPUT_STYLE}
@@ -358,12 +415,15 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                         />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <input
+                      {churned && emp.endDate
+                        ? <span className="text-xs text-gray-500">{new Date(emp.endDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                        : <input
                             type="date"
                             className={INPUT_STYLE}
                             value={emp.endDate || ''}
                             onChange={(e) => handleEmpChange(idx, 'endDate', e.target.value)}
-                        />
+                          />
+                      }
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <input
@@ -376,8 +436,48 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400 italic">
                       8h/dia úteis
                     </td>
+                    {/* Ação: Dar Saída / Reativar */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {churned ? (
+                        <button
+                          onClick={() => handleReativar(idx)}
+                          className="text-xs px-2 py-1 rounded border border-green-300 text-green-700 bg-green-50 hover:bg-green-100 transition-colors"
+                        >
+                          Reativar
+                        </button>
+                      ) : churnTarget === idx ? (
+                        <div className="flex items-center gap-1 bg-red-50 border border-red-200 rounded p-2">
+                          <input
+                            type="date"
+                            className="text-xs border border-red-300 rounded px-1 py-0.5 bg-white focus:outline-none"
+                            value={churnDate}
+                            onChange={e => setChurnDate(e.target.value)}
+                          />
+                          <button
+                            onClick={() => handleChurnConfirm(idx)}
+                            className="text-xs px-2 py-0.5 rounded bg-red-600 text-white hover:bg-red-700"
+                          >
+                            Confirmar
+                          </button>
+                          <button
+                            onClick={() => setChurnTarget(null)}
+                            className="text-xs px-1.5 py-0.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setChurnTarget(idx); setChurnDate(new Date().toISOString().slice(0, 10)); }}
+                          className="text-xs px-2 py-1 rounded border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors flex items-center gap-1"
+                        >
+                          <UserX size={12} /> Dar Saída
+                        </button>
+                      )}
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

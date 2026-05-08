@@ -536,9 +536,20 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {sortedEmployees.map((emp, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{emp.name}</td>
+                    {sortedEmployees.map((emp, idx) => {
+                      const empChurned = emp.endDate && new Date(emp.endDate + 'T00:00:00') <= new Date();
+                      return (
+                      <tr key={idx} className={`hover:bg-gray-50 ${empChurned ? 'opacity-75' : ''}`}>
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                          <div className="flex flex-col gap-0.5">
+                            <span>{emp.name}</span>
+                            {empChurned && emp.endDate && (
+                              <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded w-fit">
+                                Saiu em {new Date(emp.endDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-6 py-4 text-sm text-gray-500">{emp.department}</td>
                         <td className="px-6 py-4">
                           <div className="flex gap-1 flex-wrap">
@@ -563,7 +574,8 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500 text-right">{fmt(emp.costGenerated)}</td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
               </table>
            </div>
