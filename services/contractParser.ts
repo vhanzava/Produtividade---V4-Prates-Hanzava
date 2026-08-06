@@ -81,57 +81,61 @@ export const extractContractData = async (file: File): Promise<ContractData> => 
     fullText += pageText + '\n';
   }
 
-  // O SOW atual traz dois blocos independentes no topo — "Recorrência" e
-  // "Implementação (Pontual)" — e um contrato pode ter só um dos dois.
-  // Cada campo aceita mais de uma redação: a primeira que casar vence, então a
-  // ordem importa (a redação atual vem antes da legada).
-  const patterns = {
-    // Busca nome após "Contratante"
-    clientName: [
-      /Contratante\s*:?\s*([\s\S]*?)(?=\s*,?\s*pessoa jurídica|\s*,?\s*inscrita no CNPJ)/i,
-    ],
-
-    // "Valor mensal do projeto: R$ 495,94"  (redação atual)
-    // "Valor da Parcela: R$ 6.602,01"       (redação legada)
-    // Cuidado: "Valor TOTAL do projeto" aparece logo antes do mensal e não pode
-    // ser confundido com ele — daí o "mensal" explícito no padrão.
-    recurringFee: [
-      /Valor\s+mensal\s+do\s+projeto\s*:?\s*R\$\s*([\d.,]+)/i,
-      /Valor\s+da\s+Parcela\s*:?\s*R\$\s*([\d.,]+)/i,
-    ],
-
-    // "Valor de implementação (pontual): R$ 7.023,95"
-    oneTimeFee: [
-      /Valor\s+de\s+implementa[çc][ãa]o\s*\(pontual\)\s*:?\s*R\$\s*([\d.,]+)/i,
-      /Valor\s+de\s+implementa[çc][ãa]o\s*:?\s*R\$\s*([\d.,]+)/i,
-    ],
-
-    // Contratos com recorrência usam "Data de início do projeto"; os que só têm
-    // implementação usam "Data de início do escopo fechado".
-    startDate: [
-      /Data\s+de\s+in[íi]cio\s+do\s+projeto\s*:?\s*(.*?)(?:;|\n|Valor|Forma|Data|$)/i,
-      /Data\s+de\s+in[íi]cio\s+do\s+escopo\s+fechado\s*:?\s*(.*?)(?:;|\n|Valor|Forma|Data|$)/i,
-    ],
-
-    // "Quantidade de parcelas: 6"
-    installments: [
-      /Quantidade\s+de\s+parcelas\s*:?\s*(\d+)/i,
-    ],
-  };
-
-  const firstMatch = (candidates: RegExp[]): string | null => {
+  const firstMatch = (text: string, candidates: RegExp[]): string | null => {
     for (const pattern of candidates) {
-      const match = fullText.match(pattern);
+      const match = text.match(pattern);
       if (match && match[1] && match[1].trim()) return match[1].trim();
     }
     return null;
   };
 
-  const name = firstMatch(patterns.clientName);
-  const recurring = firstMatch(patterns.recurringFee);
-  const oneTime = firstMatch(patterns.oneTimeFee);
-  const start = firstMatch(patterns.startDate);
-  const parcels = firstMatch(patterns.installments);
+  // Os contratos V4 vêm em três formatos, e todos separam recorrência de
+  // implementação em blocos. O problema é que o rótulo "Valor total do projeto"
+  // aparece nos DOIS blocos com significados diferentes — no de recorrência é a
+  // soma das mensalidades, no de implementação é o valor do setup. Ler o
+  // documento inteiro de uma vez confunde os dois, então cortamos no cabeçalho
+  // da implementação e procuramos cada valor só na metade a que ele pertence.
+  //
+  //   "Implementação (Pontual)"      → SOW atual
+  //   "Implementação  Descrição ..." → tabela de Condições Comerciais
+  const implHeader = /Implementa[çc][ãa]o\s*(?:\(\s*Pontual\s*\)|Descri[çc][ãa]o)/i;
+  const headerAt = fullText.search(implHeader);
+  const recurringSection = headerAt >= 0 ? fullText.slice(0, headerAt) : fullText;
+  const implementationSection = headerAt >= 0 ? fullText.slice(headerAt) : '';
+
+  const name = firstMatch(fullText, [
+    /Contratante\s*:?\s*([\s\S]*?)(?=\s*,?\s*pessoa jurídica|\s*,?\s*inscrita no CNPJ)/i,
+  ]);
+
+  const recurring = firstMatch(recurringSection, [
+    // "Valor mensal do projeto: R$ 495,94"
+    /Valor\s+mensal\s+do\s+projeto\s*:?\s*R\$\s*([\d.,]+)/i,
+    // "Valor mensal da parcela, se houver: R$ 6.039,34"
+    // Quantificador preguiçoso e limitado até o "R$" mais próximo. Uma classe
+    // negada como [^:R] não serve aqui: sob o flag /i ela também exclui "r"
+    // minúsculo, e trava no "r" de "houver" antes de alcançar o valor.
+    /Valor\s+mensal\s+da\s+parcela[\s\S]{0,40}?R\$\s*([\d.,]+)/i,
+    // "Valor da Parcela: R$ 6.602,01" (redação legada)
+    /Valor\s+da\s+Parcela\s*:?\s*R\$\s*([\d.,]+)/i,
+  ]);
+
+  const oneTime = firstMatch(implementationSection, [
+    /Valor\s+de\s+implementa[çc][ãa]o\s*\(\s*pontual\s*\)\s*:?\s*R\$\s*([\d.,]+)/i,
+    /Valor\s+de\s+implementa[çc][ãa]o\s*:?\s*R\$\s*([\d.,]+)/i,
+    // Dentro do bloco de implementação, "valor total do projeto" É o setup.
+    /Valor\s+total\s+do\s+projeto\s*:?\s*R\$\s*([\d.,]+)/i,
+  ]);
+
+  // Contratos com recorrência usam "Data de início do projeto"; os que só têm
+  // escopo fechado usam "Data de início do escopo fechado".
+  const start = firstMatch(fullText, [
+    /Data\s+de\s+in[íi]cio\s+do\s+projeto\s*:?\s*(.*?)(?:;|\n|Valor|Forma|Data|Vig[êe]ncia|$)/i,
+    /Data\s+de\s+in[íi]cio\s+do\s+escopo\s+fechado\s*:?\s*(.*?)(?:;|\n|Valor|Forma|Data|$)/i,
+  ]);
+
+  const parcels = firstMatch(fullText, [
+    /Quantidade\s+de\s+[Pp]arcelas\s*:?\s*(\d+)/i,
+  ]);
 
   return {
     clientName: name,
