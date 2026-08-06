@@ -8,6 +8,20 @@ import {
   IMPLEMENTATION_TYPES,
   getClientCategories,
 } from '../services/dataProcessor';
+import {
+  applyClientImport,
+  parseClientImportPayload,
+  BulkImportResult,
+} from '../services/clientBulkImport';
+
+/** Valores do diff do import em massa, legíveis na tela. */
+const formatBulkValue = (value: unknown): string => {
+  if (value === undefined || value === null || value === '') return '—';
+  if (typeof value === 'boolean') return value ? 'sim' : 'não';
+  if (Array.isArray(value)) return value.join(', ');
+  if (typeof value === 'number') return value.toLocaleString('pt-BR');
+  return String(value);
+};
 
 interface SettingsProps {
   employees: EmployeeConfig[];
@@ -70,6 +84,35 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
 
   // Loading state for PDF parsing
   const [processingClientIndex, setProcessingClientIndex] = useState<number | null>(null);
+
+  // Import em massa
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkResult, setBulkResult] = useState<BulkImportResult | null>(null);
+
+  const handleBulkPreview = () => {
+    setBulkResult(null);
+    const parsed = parseClientImportPayload(bulkText);
+    // Checa `rows` e não `error`: uma string vazia em `error` seria falsy e o
+    // TypeScript não conseguiria estreitar a união pelo campo de erro.
+    if (parsed.rows === null) {
+      setBulkError(parsed.error);
+      return;
+    }
+    setBulkError(null);
+    // Pré-visualização roda sobre uma cópia; nada é alterado até "Aplicar".
+    setBulkResult(applyClientImport(localClients, parsed.rows));
+  };
+
+  const handleBulkApply = () => {
+    if (!bulkResult) return;
+    setLocalClients(bulkResult.clients);
+    setIsSaved(false);
+    setBulkResult(null);
+    setBulkText('');
+    setBulkOpen(false);
+  };
 
   const [newClientName, setNewClientName] = useState('');
   const [newClientFee, setNewClientFee] = useState('');
@@ -526,6 +569,96 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
           </div>
         ) : (
           <div className="space-y-6">
+             {/* Import em massa: corrigir 30 clientes campo a campo na tabela é
+                 inviável, e foi o cadastro manual que colocou valor de
+                 implementação no campo de fee recorrente. */}
+             <div className="bg-blue-50 border border-blue-200 rounded-md">
+                <button
+                    onClick={() => setBulkOpen(!bulkOpen)}
+                    className="w-full flex items-center justify-between px-4 py-2 text-sm font-medium text-blue-800 hover:bg-blue-100 transition-colors rounded-md"
+                >
+                    <span className="flex items-center gap-2">
+                        <Upload size={14} /> Importar correções em massa (JSON)
+                    </span>
+                    <span className="text-xs text-blue-600">{bulkOpen ? 'fechar' : 'abrir'}</span>
+                </button>
+
+                {bulkOpen && (
+                    <div className="px-4 pb-4 space-y-3">
+                        <p className="text-xs text-blue-700 leading-relaxed">
+                            Cole a lista de clientes. Campos ausentes são preservados — o payload
+                            descreve só o que muda. O cliente é encontrado pelo nome ou por um apelido
+                            já cadastrado. <strong>Fee e implementação usam o valor cheio do contrato</strong>;
+                            o repasse é aplicado depois.
+                        </p>
+                        <textarea
+                            className="w-full h-48 font-mono text-xs p-3 rounded border border-blue-200 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder={'[\n  {\n    "name": "FT Containers",\n    "aliases": ["EIVA"],\n    "defaultFee": 6039.34,\n    "oneTimeFee": 17107.01,\n    "implementationType": "estruturacao",\n    "implementationMonths": 3,\n    "contractStartDate": "2026-07-02"\n  }\n]'}
+                            value={bulkText}
+                            onChange={e => { setBulkText(e.target.value); setBulkResult(null); setBulkError(null); }}
+                        />
+
+                        {bulkError && (
+                            <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
+                                {bulkError}
+                            </div>
+                        )}
+
+                        {bulkResult && (
+                            <div className="text-xs bg-white border border-blue-200 rounded p-3 space-y-2">
+                                <p className="font-medium text-gray-800">
+                                    {bulkResult.changes.length} alteração(ões) em {bulkResult.updated.length} cliente(s)
+                                    {bulkResult.created.length > 0 && `, ${bulkResult.created.length} novo(s)`}
+                                </p>
+                                {bulkResult.changes.length > 0 && (
+                                    <div className="max-h-48 overflow-y-auto border-t border-gray-100 pt-2">
+                                        {bulkResult.changes.map((c, i) => (
+                                            <div key={i} className="flex gap-2 py-0.5 text-[11px]">
+                                                <span className="font-medium text-gray-700 w-40 truncate">{c.clientName}</span>
+                                                <span className="text-gray-500 w-36">{c.field}</span>
+                                                <span className="text-red-600 line-through">{formatBulkValue(c.from)}</span>
+                                                <span className="text-gray-400">→</span>
+                                                <span className="text-green-700 font-medium">{formatBulkValue(c.to)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {bulkResult.created.length > 0 && (
+                                    <p className="text-gray-600 border-t border-gray-100 pt-2">
+                                        Novos: {bulkResult.created.join(', ')}
+                                    </p>
+                                )}
+                                {bulkResult.merged.length > 0 && (
+                                    <p className="text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                                        Cadastros duplicados absorvidos por apelido: {bulkResult.merged.join(' · ')}
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="flex gap-2">
+                            <button
+                                onClick={handleBulkPreview}
+                                disabled={!bulkText.trim()}
+                                className="text-xs px-3 py-1.5 rounded border border-blue-300 text-blue-700 bg-white hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                Pré-visualizar
+                            </button>
+                            <button
+                                onClick={handleBulkApply}
+                                disabled={!bulkResult || bulkResult.changes.length + bulkResult.created.length + bulkResult.merged.length === 0}
+                                className="text-xs px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                Aplicar
+                            </button>
+                        </div>
+                        <p className="text-[11px] text-blue-600">
+                            Aplicar só altera a tabela abaixo. Nada vai para a nuvem até você clicar em Salvar Alterações.
+                        </p>
+                    </div>
+                )}
+             </div>
+
              <div className="bg-gray-50 p-4 rounded-md border border-gray-200 flex flex-wrap items-end gap-4">
                 <div className="flex-1 min-w-[200px]">
                     <label className="block text-xs font-medium text-gray-500 mb-1">Nome do Cliente/Projeto</label>

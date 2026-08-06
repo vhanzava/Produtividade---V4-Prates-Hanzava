@@ -31,6 +31,35 @@ export const IMPLEMENTATION_TYPES: {
 export const DEFAULT_IMPLEMENTATION_TYPE: ImplementationType = 'setup';
 
 /**
+ * Constrói o índice que resolve nome de workspace do eKyte para o nome do
+ * cliente cadastrado. Sem isso, uma workspace chamada "EIVA" e um cadastro
+ * chamado "FT Containers" viram dois clientes: um com as horas e o custo, outro
+ * com o fee — e a margem dos dois fica errada.
+ */
+export const buildClientNameIndex = (clients: ClientConfig[]): Map<string, string> => {
+  const index = new Map<string, string>();
+  const key = (value: string) => value.trim().toLowerCase();
+
+  // Apelidos primeiro, nomes depois: um cliente de fato cadastrado nunca é
+  // apelido de outro, então o nome próprio precisa prevalecer se houver
+  // conflito. Numa passada só, a ordem do array decidiria — o que é acidente.
+  clients.forEach(client => {
+    client.aliases?.forEach(alias => {
+      if (alias && alias.trim()) index.set(key(alias), client.name);
+    });
+  });
+  clients.forEach(client => {
+    index.set(key(client.name), client.name);
+  });
+
+  return index;
+};
+
+/** Nome canônico do cliente a que uma workspace pertence. */
+export const resolveClientName = (workspace: string, index: Map<string, string>): string =>
+  index.get(workspace.trim().toLowerCase()) ?? workspace;
+
+/**
  * Fração do valor de contrato que de fato vira receita desta unidade.
  * Contrato originado fora repassa só uma parte (30% na V4 Prates Hanzava);
  * contrato próprio devolve 1.
@@ -298,6 +327,10 @@ export const calculateSummary = (
   };
 
   // 1. Calculate Costs
+  // As horas chegam identificadas pela workspace do eKyte, que muitas vezes tem
+  // nome diferente do cadastro. O índice abaixo traz tudo para o nome canônico
+  // antes de somar, para que horas e fee caiam no mesmo cliente.
+  const nameIndex = buildClientNameIndex(clients);
   const clientStats = new Map<string, { hours: number; cost: number }>();
   const empStats = new Map<string, { hours: number; cost: number }>();
 
@@ -319,11 +352,12 @@ export const calculateSummary = (
     }
 
     const taskCost = entry.realizedDecimal * hourlyRate;
+    const clientName = resolveClientName(entry.workspace, nameIndex);
 
-    const cStat = clientStats.get(entry.workspace) || { hours: 0, cost: 0 };
+    const cStat = clientStats.get(clientName) || { hours: 0, cost: 0 };
     cStat.hours += entry.realizedDecimal;
     cStat.cost += taskCost;
-    clientStats.set(entry.workspace, cStat);
+    clientStats.set(clientName, cStat);
 
     const eStat = empStats.get(entry.executor) || { hours: 0, cost: 0 };
     eStat.hours += entry.realizedDecimal;
@@ -331,7 +365,7 @@ export const calculateSummary = (
     empStats.set(entry.executor, eStat);
 
     // Atribui horas à vertical do cliente que foi atendido
-    const clientCat = clientMap.get(entry.workspace)?.category || 'Executar';
+    const clientCat = clientMap.get(clientName)?.category || 'Executar';
     hoursByVertical[clientCat] += entry.realizedDecimal;
 
     totalHoursRealizedGlobal += entry.realizedDecimal;

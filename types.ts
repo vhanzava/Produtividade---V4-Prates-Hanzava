@@ -52,6 +52,11 @@ export interface EmployeeConfig {
 
 export interface ClientConfig {
   name: string;
+  // Outros nomes pelos quais este cliente aparece — normalmente o nome da
+  // workspace no eKyte, que raramente coincide com o do cadastro. Sem isto o
+  // cliente vira duas linhas: uma com as horas e outra com o fee.
+  // Ex.: cadastro "FT Containers", workspace no eKyte "EIVA".
+  aliases?: string[];
   isActive: boolean;
   // Categoria do fee RECORRENTE. A implementação é classificada à parte, em
   // `implementationType` — um cliente costuma pertencer a mais de uma categoria.
