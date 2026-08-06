@@ -18,14 +18,22 @@ const ekyteDevApi = (env: Record<string, string>): Plugin => ({
   name: 'ekyte-dev-api',
   apply: 'serve',
   configureServer(server) {
-    if (env.EKYTE_API_KEY) {
-      process.env.EKYTE_API_KEY = env.EKYTE_API_KEY;
+    // O handler valida a sessão contra o Supabase, então precisa das mesmas
+    // variáveis em desenvolvimento — senão o dev sempre responderia 401.
+    for (const nome of ['EKYTE_API_KEY', 'SUPABASE_URL', 'SUPABASE_ANON_KEY'] as const) {
+      if (env[nome]) process.env[nome] = env[nome];
     }
+    // Conveniência: o .env.local já tem as VITE_* do Supabase; reaproveita.
+    process.env.SUPABASE_URL = process.env.SUPABASE_URL || env.VITE_SUPABASE_URL;
+    process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY;
 
     server.middlewares.use('/api/ekyte', (req, res) => {
       // Sem @types/node instalado, IncomingMessage/ServerResponse chegam como
       // stubs incompletos — daí os casts estruturais abaixo.
-      const { url: rawUrl } = req as unknown as { url?: string };
+      const { url: rawUrl, headers } = req as unknown as {
+        url?: string;
+        headers?: Record<string, string | string[] | undefined>;
+      };
       const response = res as unknown as {
         statusCode: number;
         setHeader(name: string, value: string): void;
@@ -34,8 +42,10 @@ const ekyteDevApi = (env: Record<string, string>): Plugin => ({
 
       const url = new URL(rawUrl || '/', 'http://localhost');
       const query = Object.fromEntries(url.searchParams.entries());
+      const rawAuth = headers?.authorization;
+      const authorization = Array.isArray(rawAuth) ? rawAuth[0] : rawAuth;
 
-      handleEkyteRequest(query).then(({ status, body }) => {
+      handleEkyteRequest(query, authorization).then(({ status, body }) => {
         response.statusCode = status;
         response.setHeader('Content-Type', 'application/json; charset=utf-8');
         response.end(JSON.stringify(body));

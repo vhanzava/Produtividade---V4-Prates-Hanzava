@@ -54,10 +54,30 @@ Em **Settings → Environment Variables**, cadastre:
 | Variável | Escopo | Observação |
 | --- | --- | --- |
 | `EKYTE_API_KEY` | servidor | sem prefixo `VITE_` |
+| `SUPABASE_URL` | servidor | mesmo valor da `VITE_`, sem o prefixo |
+| `SUPABASE_ANON_KEY` | servidor | mesmo valor da `VITE_`, sem o prefixo |
 | `VITE_SUPABASE_URL` | browser | |
 | `VITE_SUPABASE_ANON_KEY` | browser | apenas a chave anon |
 
-Depois faça o redeploy. A pasta `api/` vira Serverless Function automaticamente.
+Marque **Production** em cada uma e faça o redeploy — variável de ambiente só
+entra em deploy novo. A pasta `api/` vira Serverless Function automaticamente.
+
+## Acesso
+
+O login é do Supabase: e-mail e senha, contas criadas em **Authentication →
+Users** no painel. Sem sessão válida o banco não responde e o `/api/ekyte`
+devolve 401.
+
+As permissões continuam derivadas do e-mail, em
+[`services/auth.ts`](services/auth.ts): todo mundo da operação enxerga; editar
+Health Score é restrito a alguns; editar produtividade, só ao master.
+
+> A chave anon é pública por design no Supabase — ela vai no bundle do browser
+> e não há como escondê-la. O que a torna inofensiva é a RLS exigir sessão
+> autenticada. Enquanto as policies estiveram como `USING (true)`, qualquer
+> pessoa com a URL do site lia e escrevia a base inteira.
+> Ver [`secure_rls_policies.sql`](secure_rls_policies.sql), que também traz a
+> ordem de execução — rodar antes do deploy derruba a ferramenta.
 
 ## Arquitetura da integração
 

@@ -168,10 +168,51 @@ export interface EkyteHandlerResult {
 }
 
 /**
+ * Confere se o token pertence a uma sessão válida do Supabase.
+ *
+ * O endpoint estava aberto: qualquer um com a URL puxava todos os dados do
+ * eKyte da empresa. Aqui a checagem é delegada ao próprio Supabase — não
+ * guardamos segredo de JWT nem reimplementamos validação de assinatura, que é
+ * onde esse tipo de código costuma errar.
+ */
+const isAuthenticated = async (token: string | undefined): Promise<boolean> => {
+  if (!token) return false;
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+
+  // Sem as variáveis o proxy não tem como validar. Nega — falhar fechado é o
+  // comportamento certo aqui; falhar aberto reabriria o buraco silenciosamente.
+  if (!supabaseUrl || !supabaseAnonKey) return false;
+
+  try {
+    const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` },
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+};
+
+const bearerToken = (header: string | undefined): string | undefined => {
+  if (!header) return undefined;
+  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
+  return match ? match[1] : undefined;
+};
+
+/**
  * Núcleo do endpoint, independente de framework — usado tanto pela função
  * serverless quanto pelo middleware de desenvolvimento em `vite.config.ts`.
  */
-export const handleEkyteRequest = async (query: Query): Promise<EkyteHandlerResult> => {
+export const handleEkyteRequest = async (
+  query: Query,
+  authorizationHeader?: string,
+): Promise<EkyteHandlerResult> => {
+  if (!(await isAuthenticated(bearerToken(authorizationHeader)))) {
+    return { status: 401, body: { error: 'Sessão inválida ou expirada. Faça login novamente.' } };
+  }
+
   const rawResource = Array.isArray(query.resource) ? query.resource[0] : query.resource;
 
   if (!isEkyteResource(rawResource)) {
@@ -203,6 +244,7 @@ interface VercelLikeRequest {
   method?: string;
   query?: Query;
   url?: string;
+  headers?: Record<string, string | string[] | undefined>;
 }
 
 interface VercelLikeResponse {
@@ -228,7 +270,10 @@ export default async function handler(req: VercelLikeRequest, res: VercelLikeRes
       query = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams.entries());
     }
 
-    const { status, body } = await handleEkyteRequest(query);
+    const rawAuth = req.headers?.authorization ?? req.headers?.Authorization;
+    const authorization = Array.isArray(rawAuth) ? rawAuth[0] : rawAuth;
+
+    const { status, body } = await handleEkyteRequest(query, authorization);
     res.status(status).json(body);
   } catch (err) {
     // Rede de segurança: sem isto, um throw aqui vira página de erro em HTML da

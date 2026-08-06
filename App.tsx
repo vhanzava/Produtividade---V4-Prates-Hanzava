@@ -8,8 +8,9 @@ import Dashboard from './components/Dashboard';
 import Settings from './components/Settings';
 import Login from './components/Login';
 import HealthDashboard from './components/HealthDashboard';
-import { LayoutDashboard, Settings as SettingsIcon, LogOut, RefreshCw, Cloud, CloudOff, Info, HeartPulse, BarChart2 } from 'lucide-react';
+import { LayoutDashboard, Settings as SettingsIcon, LogOut, RefreshCw, Cloud, CloudOff, Info, HeartPulse, BarChart2, Loader } from 'lucide-react';
 import { supabase } from './lib/supabase';
+import { buildSession } from './services/auth';
 
 const DATE_INPUT_STYLE = "bg-gray-700 text-white border-gray-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm p-1 border";
 // Variante clara para o card de estado vazio (fundo branco). Constante separada
@@ -20,6 +21,31 @@ const DATE_INPUT_STYLE_LIGHT = "bg-white text-gray-800 border-gray-300 rounded-m
 const App: React.FC = () => {
   // Auth State
   const [session, setSession] = useState<UserSession | null>(null);
+  // Enquanto o Supabase não devolve a sessão salva, mostrar o Login faria a
+  // tela piscar a cada refresh mesmo com o usuário já logado.
+  const [isRestoringSession, setIsRestoringSession] = useState(true);
+
+  // Restaura a sessão do Supabase (fica no storage do browser) e acompanha
+  // logout/expiração vindos de qualquer aba.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      const email = data.session?.user?.email;
+      if (email) setSession(buildSession(email));
+      setIsRestoringSession(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, authSession) => {
+      const email = authSession?.user?.email;
+      setSession(email ? buildSession(email) : null);
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+  };
 
   // App State
   const [entries, setEntries] = useState<TimeEntry[]>([]);
@@ -544,6 +570,14 @@ const App: React.FC = () => {
     return calculateSummary(filteredEntries, employees, clients, startDate, endDate);
   }, [filteredEntries, employees, clients, startDate, endDate]);
 
+  if (isRestoringSession) {
+      return (
+          <div className="min-h-screen flex items-center justify-center bg-gray-50">
+              <Loader className="h-6 w-6 text-gray-400 animate-spin" />
+          </div>
+      );
+  }
+
   if (!session?.isAuthenticated) {
       return <Login onLogin={setSession} />;
   }
@@ -589,7 +623,7 @@ const App: React.FC = () => {
           </div>
           
           <div className="text-center mt-8">
-             <button onClick={() => setSession(null)} className="text-gray-400 hover:text-red-600 transition-colors flex items-center gap-2 mx-auto">
+             <button onClick={handleLogout} className="text-gray-400 hover:text-red-600 transition-colors flex items-center gap-2 mx-auto">
                 <LogOut size={16} /> Sair
              </button>
           </div>
@@ -677,7 +711,7 @@ const App: React.FC = () => {
 
                 <div className="border-l pl-4 ml-2 border-gray-200 flex items-center gap-3">
                     <span className="text-xs text-gray-500 hidden lg:block">{session.email}</span>
-                    <button onClick={() => setSession(null)} className="text-gray-400 hover:text-red-600 transition-colors" title="Sair">
+                    <button onClick={handleLogout} className="text-gray-400 hover:text-red-600 transition-colors" title="Sair">
                         <LogOut size={18} />
                     </button>
                 </div>

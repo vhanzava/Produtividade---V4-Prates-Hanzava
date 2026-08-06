@@ -1,5 +1,6 @@
 import { TimeEntry } from '../types';
 import { getMonthKey } from './dataProcessor';
+import { supabase } from '../lib/supabase';
 
 // Cliente de sincronização com o eKyte.
 //
@@ -91,8 +92,18 @@ const fetchResource = async <T>(
   resource: string,
   params: Record<string, string>,
 ): Promise<T[]> => {
+  // O proxy exige sessão válida: sem isso o endpoint ficaria aberto e qualquer
+  // um com a URL puxaria todos os dados do eKyte da empresa.
+  const { data: auth } = await supabase.auth.getSession();
+  const token = auth.session?.access_token;
+  if (!token) {
+    throw new Error('Sessão expirada. Faça login novamente para sincronizar.');
+  }
+
   const query = new URLSearchParams({ resource, ...params });
-  const response = await fetch(`${PROXY_URL}?${query.toString()}`);
+  const response = await fetch(`${PROXY_URL}?${query.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 
   // Lê como texto antes de parsear: quando a função serverless quebra, a Vercel
   // devolve uma página de erro em HTML. Sem o corpo cru, o diagnóstico vira
