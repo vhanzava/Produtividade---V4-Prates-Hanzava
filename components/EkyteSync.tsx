@@ -25,6 +25,7 @@ const EkyteSync: React.FC<EkyteSyncProps> = ({ startDate, endDate, onSynced }) =
       const result = await syncFromEkyte(startDate, endDate);
       onSynced(result);
     } catch (err: any) {
+      console.error('[ekyte] falha na sincronização:', err);
       setError(err?.message || 'Falha ao sincronizar com o eKyte.');
     } finally {
       setIsSyncing(false);

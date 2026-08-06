@@ -94,14 +94,24 @@ const fetchResource = async <T>(
   const query = new URLSearchParams({ resource, ...params });
   const response = await fetch(`${PROXY_URL}?${query.toString()}`);
 
-  let body: { data?: T[]; error?: string } = {};
+  // Lê como texto antes de parsear: quando a função serverless quebra, a Vercel
+  // devolve uma página de erro em HTML. Sem o corpo cru, o diagnóstico vira
+  // apenas "resposta inválida" e não dá para saber o que de fato falhou.
+  const raw = await response.text();
+
+  let body: { data?: T[]; error?: string };
   try {
-    body = await response.json();
+    body = JSON.parse(raw);
   } catch {
+    if (response.status === 404) {
+      throw new Error(
+        'Endpoint /api/ekyte não encontrado. Confirme se a pasta api/ foi publicada como Serverless Function.',
+      );
+    }
+    const snippet = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+    console.error('[ekyte] resposta não-JSON do proxy:', response.status, raw.slice(0, 2000));
     throw new Error(
-      response.status === 404
-        ? 'Endpoint /api/ekyte não encontrado. Rode com "vercel dev" ou faça o deploy na Vercel.'
-        : `Resposta inválida do servidor (HTTP ${response.status}).`,
+      `Servidor respondeu HTTP ${response.status} sem JSON${snippet ? `: ${snippet}` : '.'}`,
     );
   }
 
