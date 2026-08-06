@@ -26,6 +26,8 @@ export interface ContractData {
   recurringFee: number;
   oneTimeFee: number;
   startDate: string | null;
+  /** Número de parcelas do pagamento. É o PRAZO DE COBRANÇA, não o de entrega. */
+  installments: number | null;
 }
 
 const parseBrazilianCurrency = (valueStr: string): number => {
@@ -79,51 +81,65 @@ export const extractContractData = async (file: File): Promise<ContractData> => 
     fullText += pageText + '\n';
   }
 
-  // Regex Patterns refinados
+  // O SOW atual traz dois blocos independentes no topo — "Recorrência" e
+  // "Implementação (Pontual)" — e um contrato pode ter só um dos dois.
+  // Cada campo aceita mais de uma redação: a primeira que casar vence, então a
+  // ordem importa (a redação atual vem antes da legada).
   const patterns = {
     // Busca nome após "Contratante"
-    clientName: /Contratante\s*([\s\S]*?)(?=\s*,?\s*pessoa jurídica|\s*,?\s*inscrita no CNPJ)/i,
-    
-    // "Valor da Parcela: R$ 6.602,01"
-    recurringFee: /Valor da Parcela:\s*R\$\s*([\d\.,]+)/i,
-    
-    // "Valor de implementação (pontual): R$ 27.735,00"
-    oneTimeFee: /Valor de implementação \(pontual\):\s*R\$\s*([\d\.,]+)/i,
+    clientName: [
+      /Contratante\s*:?\s*([\s\S]*?)(?=\s*,?\s*pessoa jurídica|\s*,?\s*inscrita no CNPJ)/i,
+    ],
 
-    // "Data de início do projeto: 21 de fevereiro de 2026" - Captura até ; ou fim de linha
-    startDate: /Data de início do projeto:\s*(.*?)(;|$)/i
+    // "Valor mensal do projeto: R$ 495,94"  (redação atual)
+    // "Valor da Parcela: R$ 6.602,01"       (redação legada)
+    // Cuidado: "Valor TOTAL do projeto" aparece logo antes do mensal e não pode
+    // ser confundido com ele — daí o "mensal" explícito no padrão.
+    recurringFee: [
+      /Valor\s+mensal\s+do\s+projeto\s*:?\s*R\$\s*([\d.,]+)/i,
+      /Valor\s+da\s+Parcela\s*:?\s*R\$\s*([\d.,]+)/i,
+    ],
+
+    // "Valor de implementação (pontual): R$ 7.023,95"
+    oneTimeFee: [
+      /Valor\s+de\s+implementa[çc][ãa]o\s*\(pontual\)\s*:?\s*R\$\s*([\d.,]+)/i,
+      /Valor\s+de\s+implementa[çc][ãa]o\s*:?\s*R\$\s*([\d.,]+)/i,
+    ],
+
+    // Contratos com recorrência usam "Data de início do projeto"; os que só têm
+    // implementação usam "Data de início do escopo fechado".
+    startDate: [
+      /Data\s+de\s+in[íi]cio\s+do\s+projeto\s*:?\s*(.*?)(?:;|\n|Valor|Forma|Data|$)/i,
+      /Data\s+de\s+in[íi]cio\s+do\s+escopo\s+fechado\s*:?\s*(.*?)(?:;|\n|Valor|Forma|Data|$)/i,
+    ],
+
+    // "Quantidade de parcelas: 6"
+    installments: [
+      /Quantidade\s+de\s+parcelas\s*:?\s*(\d+)/i,
+    ],
   };
 
-  const data: ContractData = {
-    clientName: null,
-    recurringFee: 0,
-    oneTimeFee: 0,
-    startDate: null
+  const firstMatch = (candidates: RegExp[]): string | null => {
+    for (const pattern of candidates) {
+      const match = fullText.match(pattern);
+      if (match && match[1] && match[1].trim()) return match[1].trim();
+    }
+    return null;
   };
 
-  // 1. Extract Name
-  const nameMatch = fullText.match(patterns.clientName);
-  if (nameMatch && nameMatch[1]) {
-      data.clientName = nameMatch[1].trim();
-  }
+  const name = firstMatch(patterns.clientName);
+  const recurring = firstMatch(patterns.recurringFee);
+  const oneTime = firstMatch(patterns.oneTimeFee);
+  const start = firstMatch(patterns.startDate);
+  const parcels = firstMatch(patterns.installments);
 
-  // 2. Extract Recurring Fee
-  const recMatch = fullText.match(patterns.recurringFee);
-  if (recMatch && recMatch[1]) {
-      data.recurringFee = parseBrazilianCurrency(recMatch[1]);
-  }
-
-  // 3. Extract One Time Fee
-  const oneTimeMatch = fullText.match(patterns.oneTimeFee);
-  if (oneTimeMatch && oneTimeMatch[1]) {
-      data.oneTimeFee = parseBrazilianCurrency(oneTimeMatch[1]);
-  }
-
-  // 4. Extract Start Date
-  const dateMatch = fullText.match(patterns.startDate);
-  if (dateMatch && dateMatch[1]) {
-      data.startDate = parseBrazilianDate(dateMatch[1]);
-  }
-
-  return data;
+  return {
+    clientName: name,
+    // Ausência do bloco de recorrência significa contrato só de implementação —
+    // zero recorrente é resposta correta, não falha de leitura.
+    recurringFee: recurring ? parseBrazilianCurrency(recurring) : 0,
+    oneTimeFee: oneTime ? parseBrazilianCurrency(oneTime) : 0,
+    startDate: start ? parseBrazilianDate(start) : null,
+    installments: parcels ? parseInt(parcels, 10) : null,
+  };
 };

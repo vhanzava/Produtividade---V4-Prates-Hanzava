@@ -201,30 +201,60 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
           const newClients = [...localClients];
           const client = newClients[index];
 
-          if (data.recurringFee > 0) {
-              if (selectedMonth === 'default') {
-                  client.defaultFee = data.recurringFee;
-              } else {
-                  if (!client.history) client.history = {};
-                  client.history[selectedMonth] = data.recurringFee;
-              }
+          // Considera-se lido o contrato do qual saiu ao menos um dos campos.
+          // Sem isso não dá para distinguir "contrato sem recorrência" de
+          // "não consegui ler o PDF", e o segundo caso não pode zerar cadastro.
+          const parsedOk = data.recurringFee > 0 || data.oneTimeFee > 0 || !!data.startDate;
+          if (!parsedOk) {
+              alert('Não foi possível extrair os valores deste PDF. Confira se é o contrato (SOW) e preencha manualmente.');
+              return;
           }
 
-          if (data.oneTimeFee > 0) {
-              client.oneTimeFee = data.oneTimeFee;
+          // Aplicado mesmo quando zero: contrato só de implementação NÃO tem
+          // recorrência, e deixar o valor antigo era justamente o que fazia o
+          // valor do setup ficar cobrado todo mês para sempre.
+          if (selectedMonth === 'default') {
+              client.defaultFee = data.recurringFee;
+          } else {
+              if (!client.history) client.history = {};
+              client.history[selectedMonth] = data.recurringFee;
           }
+
+          client.oneTimeFee = data.oneTimeFee;
 
           if (data.startDate) {
               client.contractStartDate = data.startDate;
           }
-          
+
           if (!client.name && data.clientName) {
               client.name = data.clientName;
           }
 
           setLocalClients(newClients);
           setIsSaved(false);
-          alert(`Contrato Processado!\nFee Recorrente: R$ ${data.recurringFee}\nSetup (One-Time): R$ ${data.oneTimeFee}\nInício: ${data.startDate || 'Não detectado'}`);
+
+          const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+          const linhas = [
+              'Contrato processado!',
+              '',
+              `Fee recorrente: ${brl(data.recurringFee)}${data.recurringFee === 0 ? '  (contrato sem recorrência)' : ''}`,
+              `Implementação:  ${brl(data.oneTimeFee)}`,
+              `Início:         ${data.startDate || 'não detectado'}`,
+          ];
+          if (data.installments) {
+              // Parcelas são prazo de COBRANÇA. "Meses impl." é prazo de ENTREGA,
+              // e nos contratos V4 os dois quase nunca coincidem.
+              linhas.push(
+                  `Parcelas:       ${data.installments}x`,
+                  '',
+                  'Atenção: parcelas são o prazo de pagamento, não o de entrega.',
+                  'Ajuste "Meses impl." conforme a duração real do escopo.',
+              );
+          }
+          if (!data.startDate) {
+              linhas.push('', 'Sem data de início o valor de implementação não é reconhecido. Preencha na tabela.');
+          }
+          alert(linhas.join('\n'));
 
       } catch (err: any) {
           console.error("PDF Error:", err);
