@@ -14,6 +14,22 @@ export type DepartmentType = 'Criação' | 'Atendimento' | 'Gestão de Tráfego'
 
 export type ClientCategory = 'Saber' | 'Ter' | 'Executar';
 
+/**
+ * O que foi entregue na implementação do contrato. Define em qual categoria a
+ * receita de setup é contabilizada — que normalmente NÃO é a mesma do fee
+ * recorrente. Um cliente de Executar com uma landing page no contrato gera
+ * receita em Executar (recorrente) e em Ter (implementação).
+ *
+ * Regra: Estruturação e Destrava Receita são Saber; todo o resto é Ter
+ * (setups, implementações e ferramental — site, CRM, landing page).
+ */
+export type ImplementationType =
+  | 'estruturacao'
+  | 'destrava_receita'
+  | 'setup'
+  | 'ferramental'
+  | 'outro';
+
 export interface MonthlyConfigEmp {
   cost: number;
   hours: number;
@@ -37,9 +53,14 @@ export interface EmployeeConfig {
 export interface ClientConfig {
   name: string;
   isActive: boolean;
+  // Categoria do fee RECORRENTE. A implementação é classificada à parte, em
+  // `implementationType` — um cliente costuma pertencer a mais de uma categoria.
   category: ClientCategory;
   defaultFee: number;
   oneTimeFee?: number; // Valor de Implementação/Setup
+  // O que foi implementado. Determina se a receita de setup entra em Saber ou
+  // em Ter. Quando ausente, assume-se 'setup' (→ Ter).
+  implementationType?: ImplementationType;
   // Em quantos meses a implementação é entregue. O oneTimeFee é reconhecido
   // diluído nessa janela (oneTimeFee / N por mês) em vez de 100% no mês 1:
   // o custo do setup se espalha por vários meses, então concentrar a receita
@@ -61,7 +82,13 @@ export interface ClientSummary {
   grossProfit: number;
   margin: number;
   isActive: boolean;
-  category: ClientCategory;
+  category: ClientCategory; // Categoria do fee recorrente
+  // Categoria em que a receita de implementação foi contabilizada. Só é
+  // relevante quando houve setup reconhecido no período.
+  implementationCategory: ClientCategory;
+  // Todas as categorias que o cliente movimentou no período — normalmente
+  // ['Executar'], mas ['Executar', 'Ter'] quando houve implementação.
+  categories: ClientCategory[];
   is_inadimplente: boolean; // Receita excluída do total real quando true
 }
 

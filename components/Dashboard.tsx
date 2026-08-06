@@ -73,7 +73,9 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
   };
 
   // FILTER LOGIC
-  const activeClientSummaries = clientSummaries.filter(c => (c.isActive || c.totalHours > 0) && (categoryFilter === 'All' || c.category === categoryFilter));
+  // Filtra por qualquer categoria que o cliente movimente — um cliente de
+  // Executar com implementação em Ter aparece nos dois filtros.
+  const activeClientSummaries = clientSummaries.filter(c => (c.isActive || c.totalHours > 0) && (categoryFilter === 'All' || c.categories.includes(categoryFilter)));
   
   // Filter employees: show if totalHours > 0 OR (capacityHours > 0 AND totalHours > 0)
   // Request: "se o player não tem horas apontadas ... não deve aparecer"
@@ -191,9 +193,16 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
           {/* Carteira por Categoria (Saber × Ter × Executar) */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {(['Executar', 'Saber', 'Ter'] as const).map((cat) => {
-              const catClients = activeClientSummaries.filter(c => c.category === cat);
+              // Contagem inclui quem movimenta a categoria por qualquer via
+              // (recorrente ou implementação), para bater com a receita.
+              const catClients = activeClientSummaries.filter(c => c.categories.includes(cat));
               const catRevenue = dashboard.revenueByCategory[cat];
-              const catCost = catClients.reduce((s, c) => s + c.operationalCost, 0);
+              // Custo fica na categoria do RECORRENTE. As horas do eKyte ainda não
+              // são classificadas entre setup e recorrente, então rateá-las entre
+              // duas categorias seria chute — e contá-las nas duas inflaria o custo.
+              const catCost = activeClientSummaries
+                .filter(c => c.category === cat)
+                .reduce((s, c) => s + c.operationalCost, 0);
               const catProfit = catRevenue - catCost;
               const catMargin = catRevenue > 0 ? (catProfit / catRevenue) * 100 : 0;
               const inadimplentesCount = catClients.filter(c => c.is_inadimplente).length;
@@ -466,11 +475,21 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                             {client.is_inadimplente && <span className="ml-2 text-[10px] bg-red-100 text-red-700 border border-red-200 px-1 rounded">Inadimplente</span>}
                         </td>
                         <td className="px-6 py-4 text-center">
-                            <span className={`px-2 py-1 rounded text-xs border ${
-                                client.category === 'Saber' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                                client.category === 'Ter' ? 'bg-green-50 text-green-700 border-green-200' :
-                                'bg-red-50 text-red-700 border-red-200'
-                            }`}>{client.category}</span>
+                            <div className="flex flex-wrap gap-1 justify-center">
+                                {client.categories.map(cat => (
+                                    <span
+                                        key={cat}
+                                        title={cat === client.category
+                                            ? 'Categoria do fee recorrente'
+                                            : 'Categoria da implementação reconhecida no período'}
+                                        className={`px-2 py-1 rounded text-xs border ${
+                                            cat === 'Saber' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                            cat === 'Ter' ? 'bg-green-50 text-green-700 border-green-200' :
+                                            'bg-red-50 text-red-700 border-red-200'
+                                        }`}
+                                    >{cat}</span>
+                                ))}
+                            </div>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500 text-right">{fmtNum(client.totalHours)}h</td>
                         <td className="px-6 py-4 text-sm text-gray-500 text-right">{fmt(client.operationalCost)}</td>

@@ -1,4 +1,4 @@
-import { TimeEntry, EmployeeConfig, ClientConfig, ClientSummary, EmployeeSummary, DashboardSummary, DepartmentSummary, DepartmentType, ClientCategory } from '../types';
+import { TimeEntry, EmployeeConfig, ClientConfig, ClientSummary, EmployeeSummary, DashboardSummary, DepartmentSummary, DepartmentType, ClientCategory, ImplementationType } from '../types';
 
 /**
  * Prazo padrão de implementação, em meses, quando o cliente não tem
@@ -6,6 +6,52 @@ import { TimeEntry, EmployeeConfig, ClientConfig, ClientSummary, EmployeeSummary
  * setup é reconhecido.
  */
 export const DEFAULT_IMPLEMENTATION_MONTHS = 3;
+
+/**
+ * Catálogo dos tipos de implementação e a categoria de receita de cada um.
+ *
+ * Regra do contrato: Estruturação e Destrava Receita são **Saber**; todo o
+ * resto é **Ter** — setups, implementações e ferramental (site, CRM, landing
+ * page). Manter a regra aqui, e não espalhada pela UI, é o que garante que a
+ * classificação não dependa de alguém lembrar dela na hora de cadastrar.
+ */
+export const IMPLEMENTATION_TYPES: {
+  value: ImplementationType;
+  label: string;
+  category: ClientCategory;
+}[] = [
+  { value: 'estruturacao', label: 'Estruturação', category: 'Saber' },
+  { value: 'destrava_receita', label: 'Destrava Receita', category: 'Saber' },
+  { value: 'setup', label: 'Setup', category: 'Ter' },
+  { value: 'ferramental', label: 'Ferramental (site, CRM, LP)', category: 'Ter' },
+  { value: 'outro', label: 'Outro', category: 'Ter' },
+];
+
+/** Tipo assumido quando o cliente não tem `implementationType` preenchido. */
+export const DEFAULT_IMPLEMENTATION_TYPE: ImplementationType = 'setup';
+
+/** Categoria em que a receita de implementação de um cliente é contabilizada. */
+export const getImplementationCategory = (
+  client: Pick<ClientConfig, 'implementationType'>,
+): ClientCategory => {
+  const type = client.implementationType || DEFAULT_IMPLEMENTATION_TYPE;
+  return IMPLEMENTATION_TYPES.find(t => t.value === type)?.category || 'Ter';
+};
+
+/**
+ * Categorias que o cliente ocupa segundo o CADASTRO (não o período filtrado):
+ * a do recorrente, mais a da implementação quando há valor de setup.
+ * Use em telas de configuração; no dashboard, prefira `ClientSummary.categories`,
+ * que reflete o que de fato foi reconhecido no período.
+ */
+export const getClientCategories = (client: ClientConfig): ClientCategory[] => {
+  const categories: ClientCategory[] = [client.category];
+  if (client.oneTimeFee && client.oneTimeFee > 0) {
+    const implCategory = getImplementationCategory(client);
+    if (!categories.includes(implCategory)) categories.push(implCategory);
+  }
+  return categories;
+};
 
 // Helper: "01:30" -> 1.5
 export const timeToDecimal = (timeStr: string): number => {
@@ -295,10 +341,12 @@ export const calculateSummary = (
     let totalFee = 0;
     let realizedOneTimeFee = 0;
     let category: ClientCategory = 'Executar';
+    let implementationCategory: ClientCategory = 'Ter';
     let isActive = true;
 
     if (config) {
         category = config.category;
+        implementationCategory = getImplementationCategory(config);
         isActive = config.isActive;
         
         // One Time Fee (Implementação/Setup) — reconhecimento por competência.
@@ -342,6 +390,13 @@ export const calculateSummary = (
         const margin = totalFee > 0 ? (grossProfit / totalFee) * 100 : 0;
         const isInadimplente = !!(config?.is_inadimplente);
 
+        // Um cliente ocupa mais de uma categoria quando teve implementação
+        // reconhecida no período: o recorrente numa, o setup na outra.
+        const hasImplementation = realizedOneTimeFee > 0;
+        const categories: ClientCategory[] = hasImplementation && implementationCategory !== category
+            ? [category, implementationCategory]
+            : [category];
+
         clientSummaries.push({
             name,
             totalHours: stat.hours,
@@ -352,6 +407,8 @@ export const calculateSummary = (
             margin,
             isActive,
             category,
+            implementationCategory,
+            categories,
             is_inadimplente: isInadimplente
         });
 
@@ -360,7 +417,14 @@ export const calculateSummary = (
         if (isActive || totalFee > 0) {
             if (!isInadimplente) {
                 totalRevenueGlobal += totalFee;
-                revenueByCategory[category] += totalFee;
+                // Receita dividida por natureza: o fee recorrente pertence à
+                // categoria de operação do cliente; a implementação pertence à
+                // categoria do que foi entregue (Saber para Estruturação e
+                // Destrava Receita, Ter para setups e ferramental).
+                revenueByCategory[category] += totalFee - realizedOneTimeFee;
+                if (hasImplementation) {
+                    revenueByCategory[implementationCategory] += realizedOneTimeFee;
+                }
             }
         }
     }

@@ -2,7 +2,12 @@ import React, { useState, useRef } from 'react';
 import { EmployeeConfig, ClientConfig, DepartmentType, ClientCategory, ClientCategory as Vertical } from '../types';
 import { Save, User, Briefcase, Plus, Archive, RefreshCw, Calendar, FileText, Loader, Upload, UserX } from 'lucide-react';
 import { extractContractData } from '../services/contractParser';
-import { DEFAULT_IMPLEMENTATION_MONTHS } from '../services/dataProcessor';
+import {
+  DEFAULT_IMPLEMENTATION_MONTHS,
+  DEFAULT_IMPLEMENTATION_TYPE,
+  IMPLEMENTATION_TYPES,
+  getClientCategories,
+} from '../services/dataProcessor';
 
 interface SettingsProps {
   employees: EmployeeConfig[];
@@ -556,6 +561,9 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Fee Recorrente {selectedMonth !== 'default' && '(Mês)'}
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" title="O que foi implementado no contrato. Estruturação e Destrava Receita contam como Saber; setups, implementações e ferramental (site, CRM, landing page) contam como Ter.">
+                        Tipo de impl.
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" title="Em quantos meses a implementação é entregue. O valor de setup é reconhecido diluído nessa janela, a partir da data de início do contrato.">
                         Meses impl.
                     </th>
@@ -611,12 +619,31 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     <option value="false">Churned</option>
                                 </select>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{client.name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {client.name}
+                                {/* Categorias efetivas: a do recorrente mais a da implementação,
+                                    quando há setup. Um cliente raramente pertence a uma só. */}
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                    {getClientCategories(client).map(cat => (
+                                        <span
+                                            key={cat}
+                                            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
+                                                cat === 'Saber' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                                cat === 'Ter' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                'bg-blue-50 text-blue-700 border-blue-200'
+                                            }`}
+                                        >
+                                            {cat}
+                                        </span>
+                                    ))}
+                                </div>
+                            </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <select 
+                                <select
                                     className={INPUT_STYLE}
                                     value={client.category || 'Executar'}
                                     onChange={(e) => handleClientChange(realIndex, 'category', e.target.value)}
+                                    title="Categoria do fee recorrente. A implementação é classificada separadamente em 'Tipo de impl.'."
                                 >
                                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
@@ -640,6 +667,21 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     value={getClientFee(client)}
                                     onChange={(e) => handleClientChange(realIndex, 'monthlyFee', e.target.value)}
                                 />
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <select
+                                    className={INPUT_STYLE}
+                                    value={client.implementationType || DEFAULT_IMPLEMENTATION_TYPE}
+                                    onChange={(e) => handleClientChange(realIndex, 'implementationType', e.target.value)}
+                                    disabled={!client.oneTimeFee}
+                                    title={client.oneTimeFee
+                                        ? 'Define se a receita de implementação entra em Saber ou em Ter.'
+                                        : 'Sem valor de setup, não há receita de implementação para classificar.'}
+                                >
+                                    {IMPLEMENTATION_TYPES.map(t => (
+                                        <option key={t.value} value={t.value}>{t.label} → {t.category}</option>
+                                    ))}
+                                </select>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 <input
