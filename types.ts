@@ -61,6 +61,13 @@ export interface ClientConfig {
   // O que foi implementado. Determina se a receita de setup entra em Saber ou
   // em Ter. Quando ausente, assume-se 'setup' (→ Ter).
   implementationType?: ImplementationType;
+  // Percentual do valor de contrato que fica com esta unidade (0-100).
+  // Contratos originados pela matriz ou por outra unidade repassam só uma
+  // fração — na V4 Prates Hanzava, 30%. Os valores de `defaultFee`,
+  // `history` e `oneTimeFee` guardam o valor CHEIO do contrato (que é o que
+  // está no PDF); a receita reconhecida é esse valor vezes o repasse.
+  // Ausente ou 100 = contrato próprio, receita integral.
+  repassePercent?: number;
   // Em quantos meses a implementação é entregue. O oneTimeFee é reconhecido
   // diluído nessa janela (oneTimeFee / N por mês) em vez de 100% no mês 1:
   // o custo do setup se espalha por vários meses, então concentrar a receita

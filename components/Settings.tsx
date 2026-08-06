@@ -155,6 +155,9 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
         }
     } else if (field === 'oneTimeFee') {
          client.oneTimeFee = parseFloat(value) || 0;
+    } else if (field === 'repassePercent') {
+         const pct = parseFloat(value);
+         client.repassePercent = Number.isFinite(pct) ? Math.min(100, Math.max(0, pct)) : 100;
     } else if (field === 'implementationMonths') {
          // Mínimo 1: zero meses dividiria o setup por zero.
          const months = Math.round(parseFloat(value));
@@ -591,6 +594,9 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Fee Recorrente {selectedMonth !== 'default' && '(Mês)'}
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" title="Percentual do valor de contrato que fica com esta unidade. Contrato originado pela matriz ou por outra unidade repassa 30%. Deixe 100 para contrato próprio.">
+                        Repasse %
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" title="O que foi implementado no contrato. Estruturação e Destrava Receita contam como Saber; setups, implementações e ferramental (site, CRM, landing page) contam como Ter.">
                         Tipo de impl.
                     </th>
@@ -696,6 +702,18 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     className={INPUT_STYLE}
                                     value={getClientFee(client)}
                                     onChange={(e) => handleClientChange(realIndex, 'monthlyFee', e.target.value)}
+                                />
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    step={1}
+                                    className={INPUT_STYLE}
+                                    value={client.repassePercent ?? 100}
+                                    onChange={(e) => handleClientChange(realIndex, 'repassePercent', e.target.value)}
+                                    title="Fee e setup guardam o valor CHEIO do contrato; a receita reconhecida é esse valor vezes este percentual."
                                 />
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

@@ -30,6 +30,17 @@ export const IMPLEMENTATION_TYPES: {
 /** Tipo assumido quando o cliente não tem `implementationType` preenchido. */
 export const DEFAULT_IMPLEMENTATION_TYPE: ImplementationType = 'setup';
 
+/**
+ * Fração do valor de contrato que de fato vira receita desta unidade.
+ * Contrato originado fora repassa só uma parte (30% na V4 Prates Hanzava);
+ * contrato próprio devolve 1.
+ */
+export const getRepasseRatio = (client: Pick<ClientConfig, 'repassePercent'>): number => {
+  const pct = client.repassePercent;
+  if (pct === undefined || pct === null || !Number.isFinite(pct)) return 1;
+  return Math.min(100, Math.max(0, pct)) / 100;
+};
+
 /** Categoria em que a receita de implementação de um cliente é contabilizada. */
 export const getImplementationCategory = (
   client: Pick<ClientConfig, 'implementationType'>,
@@ -348,6 +359,10 @@ export const calculateSummary = (
         category = config.category;
         implementationCategory = getImplementationCategory(config);
         isActive = config.isActive;
+        // Contrato de repasse: só uma fração do valor cheio vira receita nossa.
+        // O custo das horas é integral de qualquer forma, então ignorar isso
+        // mostraria margem que não existe.
+        const repasse = getRepasseRatio(config);
         
         // One Time Fee (Implementação/Setup) — reconhecimento por competência.
         //
@@ -363,7 +378,7 @@ export const calculateSummary = (
             const months = Math.max(1, Math.round(config.implementationMonths ?? DEFAULT_IMPLEMENTATION_MONTHS));
             const contractStart = new Date(config.contractStartDate + 'T00:00:00');
             const startMonthIndex = contractStart.getFullYear() * 12 + contractStart.getMonth();
-            const perMonth = config.oneTimeFee / months;
+            const perMonth = (config.oneTimeFee * repasse) / months;
 
             activeMonths.forEach(m => {
                 const [y, mo] = m.split('-').map(Number);
@@ -381,7 +396,7 @@ export const calculateSummary = (
         activeMonths.forEach(m => {
             const monthlyFee = config.history[m] !== undefined ? config.history[m] : config.defaultFee;
             const ratio = getProRataRatio(m);
-            totalFee += monthlyFee * ratio;
+            totalFee += monthlyFee * repasse * ratio;
         });
     }
 
