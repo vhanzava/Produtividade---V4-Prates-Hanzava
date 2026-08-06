@@ -7,11 +7,15 @@ import {
 
 // --- Constants ---
 
+// Toda vertical foi calibrada para somar no máximo 25 pontos brutos; os
+// multiplicadores abaixo levam o total a 100 (35 + 25 + 25 + 15).
+const RAW_MAX_PER_VERTICAL = 25;
+
 const WEIGHTS = {
-  vertical_1: { base: 25, multiplier: 1.4 },
-  vertical_2: { base: 25, multiplier: 1.0 },
-  vertical_3: { base: 25, multiplier: 1.0 },
-  vertical_4: { base: 25, multiplier: 0.6 }
+  vertical_1: { base: RAW_MAX_PER_VERTICAL, multiplier: 1.4 },
+  vertical_2: { base: RAW_MAX_PER_VERTICAL, multiplier: 1.0 },
+  vertical_3: { base: RAW_MAX_PER_VERTICAL, multiplier: 1.0 },
+  vertical_4: { base: RAW_MAX_PER_VERTICAL, multiplier: 0.6 }
 };
 
 const SCORES = {
@@ -158,61 +162,61 @@ export const calculateHealthScore = (input: HealthInput, clientConfig: ClientCon
   }
 
   // Apply Multipliers based on Expectations and Eligibility
-  let v1Final, v3Final, v4Final;
+  //
+  // Cada vertical soma no máximo RAW_MAX_PER_VERTICAL pontos brutos; o
+  // multiplicador define quanto ela vale dentro do total de 100. Quando uma
+  // vertical é desativada, seus pontos são redistribuídos entre as demais —
+  // por isso o teto de cada vertical MUDA por cliente, e a UI precisa recebê-lo
+  // em vez de assumir 35/25/25/15.
+  let multipliers: { v1: number; v2: number; v3: number; v4: number };
 
   if (expectsMeasurableResults && isEligibleForSurveys) {
-      // Case 1: Standard (All Active)
-      v1Final = v1Raw * WEIGHTS.vertical_1.multiplier; // 1.4 (35 pts)
-      v2Final = v2Final * WEIGHTS.vertical_2.multiplier; // 1.0 (25 pts)
-      v3Final = v3Raw * WEIGHTS.vertical_3.multiplier; // 1.0 (25 pts)
-      v4Final = v4Raw * WEIGHTS.vertical_4.multiplier; // 0.6 (15 pts)
+      // Case 1: Standard (All Active) — 35 / 25 / 25 / 15
+      multipliers = {
+          v1: WEIGHTS.vertical_1.multiplier,
+          v2: WEIGHTS.vertical_2.multiplier,
+          v3: WEIGHTS.vertical_3.multiplier,
+          v4: WEIGHTS.vertical_4.multiplier
+      };
   } else if (!expectsMeasurableResults && isEligibleForSurveys) {
-      // Case 2: Results Disabled (Redistribute V2 to V1, V3, V4)
-      // V1: 40 pts (1.6)
-      // V2: 0 pts
-      // V3: 40 pts (1.6)
-      // V4: 20 pts (0.8)
-      v1Final = v1Raw * 1.6;
-      v2Final = 0;
-      v3Final = v3Raw * 1.6;
-      v4Final = v4Raw * 0.8;
+      // Case 2: Results Disabled (Redistribute V2) — 40 / 0 / 40 / 20
+      multipliers = { v1: 1.6, v2: 0, v3: 1.6, v4: 0.8 };
   } else if (expectsMeasurableResults && !isEligibleForSurveys) {
-      // Case 3: Surveys Disabled (Redistribute V4 to V1, V2, V3)
-      // V1: 41.18 pts (1.647)
-      // V2: 29.41 pts (1.176)
-      // V3: 29.41 pts (1.176)
-      // V4: 0 pts
-      v1Final = v1Raw * 1.647;
-      v2Final = v2Final * 1.176;
-      v3Final = v3Raw * 1.176;
-      v4Final = 0;
+      // Case 3: Surveys Disabled (Redistribute V4) — 41.18 / 29.41 / 29.41 / 0
+      multipliers = { v1: 1.647, v2: 1.176, v3: 1.176, v4: 0 };
   } else {
-      // Case 4: Both Disabled (Redistribute V2 & V4 to V1, V3)
-      // V1: 58.33 pts (2.333)
-      // V2: 0 pts
-      // V3: 41.66 pts (1.666)
-      // V4: 0 pts
-      v1Final = v1Raw * 2.333;
-      v2Final = 0;
-      v3Final = v3Raw * 1.666;
-      v4Final = 0;
+      // Case 4: Both Disabled (Redistribute V2 & V4) — 58.33 / 0 / 41.66 / 0
+      multipliers = { v1: 2.333, v2: 0, v3: 1.666, v4: 0 };
   }
 
+  const v1Final = v1Raw * multipliers.v1;
+  const v2Scaled = v2Final * multipliers.v2;
+  const v3Final = v3Raw * multipliers.v3;
+  const v4Final = v4Raw * multipliers.v4;
+
   // Total
-  const totalScore = Math.max(0, Math.min(100, v1Final + v2Final + v3Final + v4Final));
+  const totalScore = Math.max(0, Math.min(100, v1Final + v2Scaled + v3Final + v4Final));
   const flagInfo = getFlag(totalScore);
+
+  const round = (value: number) => parseFloat(value.toFixed(2));
 
   return {
     clientId: input.clientId,
     monthKey: input.monthKey,
-    score: parseFloat(totalScore.toFixed(2)),
+    score: round(totalScore),
     flag: flagInfo.color,
     action: flagInfo.action,
     breakdown: {
-      engagement: parseFloat(v1Final.toFixed(2)),
-      results: parseFloat(v2Final.toFixed(2)),
-      relationship: parseFloat(v3Final.toFixed(2)),
-      surveys: parseFloat(v4Final.toFixed(2))
+      engagement: round(v1Final),
+      results: round(v2Scaled),
+      relationship: round(v3Final),
+      surveys: round(v4Final)
+    },
+    maxBreakdown: {
+      engagement: round(RAW_MAX_PER_VERTICAL * multipliers.v1),
+      results: round(RAW_MAX_PER_VERTICAL * multipliers.v2),
+      relationship: round(RAW_MAX_PER_VERTICAL * multipliers.v3),
+      surveys: round(RAW_MAX_PER_VERTICAL * multipliers.v4)
     }
   };
 };

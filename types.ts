@@ -40,6 +40,12 @@ export interface ClientConfig {
   category: ClientCategory;
   defaultFee: number;
   oneTimeFee?: number; // Valor de Implementação/Setup
+  // Em quantos meses a implementação é entregue. O oneTimeFee é reconhecido
+  // diluído nessa janela (oneTimeFee / N por mês) em vez de 100% no mês 1:
+  // o custo do setup se espalha por vários meses, então concentrar a receita
+  // num só inflava a margem do primeiro mês e afundava a dos seguintes.
+  // Use 1 para voltar ao reconhecimento integral no mês de início.
+  implementationMonths?: number;
   contractStartDate?: string; // YYYY-MM-DD
   accountManager?: string;
   is_inadimplente?: boolean; // Exclui receita do lucro real quando true
@@ -175,16 +181,23 @@ export interface HealthInput {
 
 export type HealthFlagColor = 'Black' | 'Red' | 'Yellow' | 'Green';
 
+export interface HealthVerticalBreakdown {
+  engagement: number;
+  results: number;
+  relationship: number;
+  surveys: number;
+}
+
 export interface HealthScoreResult {
   clientId: string;
   monthKey: string;
   score: number;
   flag: HealthFlagColor;
   action: string;
-  breakdown: {
-    engagement: number;
-    results: number;
-    relationship: number;
-    surveys: number;
-  };
+  breakdown: HealthVerticalBreakdown;
+  // Teto de pontos de cada vertical PARA ESTE CLIENTE. Varia conforme as
+  // verticais desativadas (resultados/pesquisas) redistribuem seus pontos.
+  // A UI precisa disto para desenhar as barras: usar 35/25/25/15 fixo faz a
+  // barra estourar quando há redistribuição.
+  maxBreakdown: HealthVerticalBreakdown;
 }

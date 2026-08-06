@@ -409,25 +409,35 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
                     Média por Vertical
                 </h3>
                 <div className="space-y-4">
-                    {[
-                        { key: 'engagement', label: 'Engajamento', color: 'blue', max: 35 },
-                        { key: 'results', label: 'Resultados', color: 'green', max: 25 },
-                        { key: 'relationship', label: 'Relacionamento', color: 'purple', max: 25 },
-                        { key: 'surveys', label: 'Pesquisas', color: 'orange', max: 15 }
-                    ].map(v => {
-                        const total = Object.values(scores).reduce((sum, s) => sum + (s.breakdown[v.key as keyof typeof s.breakdown] || 0), 0);
-                        const avg = activeClients.length ? total / activeClients.length : 0;
-                        const percent = (avg / v.max) * 100;
-                        
+                    {([
+                        { key: 'engagement', label: 'Engajamento', fill: 'bg-blue-500' },
+                        { key: 'results', label: 'Resultados', fill: 'bg-green-500' },
+                        { key: 'relationship', label: 'Relacionamento', fill: 'bg-purple-500' },
+                        { key: 'surveys', label: 'Pesquisas', fill: 'bg-orange-500' }
+                    ] as const).map(v => {
+                        // Média apenas sobre clientes que têm avaliação: dividir pelo total de
+                        // clientes ativos misturava populações e puxava a média para baixo a
+                        // cada cliente ainda não avaliado.
+                        const scored = Object.values(scores);
+                        const avg = scored.length
+                            ? scored.reduce((sum, s) => sum + (s.breakdown[v.key] || 0), 0) / scored.length
+                            : 0;
+                        // O teto varia por cliente (verticais desativadas redistribuem pontos),
+                        // então o teto de referência é a média dos tetos, não um valor fixo.
+                        const avgMax = scored.length
+                            ? scored.reduce((sum, s) => sum + (s.maxBreakdown[v.key] || 0), 0) / scored.length
+                            : 0;
+                        const percent = avgMax > 0 ? Math.min(100, Math.max(0, (avg / avgMax) * 100)) : 0;
+
                         return (
                             <div key={v.key}>
                                 <div className="flex justify-between text-sm mb-1">
                                     <span className="text-gray-600">{v.label}</span>
-                                    <span className="font-bold text-gray-900">{avg.toFixed(1)} / {v.max}</span>
+                                    <span className="font-bold text-gray-900">{avg.toFixed(1)} / {avgMax.toFixed(1)}</span>
                                 </div>
                                 <div className="w-full bg-gray-100 rounded-full h-2">
-                                    <div 
-                                        className={`h-2 rounded-full bg-${v.color}-500`} 
+                                    <div
+                                        className={`h-2 rounded-full ${v.fill}`}
                                         style={{ width: `${percent}%` }}
                                     ></div>
                                 </div>
@@ -729,18 +739,28 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
                         
                         {score && (
                             <div className="grid grid-cols-4 gap-1 mb-2">
-                                <div className="h-1 rounded-full bg-blue-200 overflow-hidden" title={`Engajamento: ${score.breakdown.engagement}`}>
-                                    <div className="h-full bg-blue-500" style={{width: `${(score.breakdown.engagement/35)*100}%`}}></div>
-                                </div>
-                                <div className="h-1 rounded-full bg-green-200 overflow-hidden" title={`Resultados: ${score.breakdown.results}`}>
-                                    <div className="h-full bg-green-500" style={{width: `${(score.breakdown.results/25)*100}%`}}></div>
-                                </div>
-                                <div className="h-1 rounded-full bg-purple-200 overflow-hidden" title={`Relacionamento: ${score.breakdown.relationship}`}>
-                                    <div className="h-full bg-purple-500" style={{width: `${(score.breakdown.relationship/25)*100}%`}}></div>
-                                </div>
-                                <div className="h-1 rounded-full bg-orange-200 overflow-hidden" title={`Pesquisas: ${score.breakdown.surveys}`}>
-                                    <div className="h-full bg-orange-500" style={{width: `${(score.breakdown.surveys/15)*100}%`}}></div>
-                                </div>
+                                {([
+                                    { key: 'engagement', label: 'Engajamento', track: 'bg-blue-200', fill: 'bg-blue-500' },
+                                    { key: 'results', label: 'Resultados', track: 'bg-green-200', fill: 'bg-green-500' },
+                                    { key: 'relationship', label: 'Relacionamento', track: 'bg-purple-200', fill: 'bg-purple-500' },
+                                    { key: 'surveys', label: 'Pesquisas', track: 'bg-orange-200', fill: 'bg-orange-500' }
+                                ] as const).map(v => {
+                                    const value = score.breakdown[v.key];
+                                    const max = score.maxBreakdown[v.key];
+                                    // Vertical desativada tem teto 0 — barra vazia em vez de divisão por zero.
+                                    // O valor pode ser negativo (o piso em 0 é só do score total), então
+                                    // a largura é travada na faixa 0–100%.
+                                    const percent = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
+                                    return (
+                                        <div
+                                            key={v.key}
+                                            className={`h-1 rounded-full overflow-hidden ${v.track}`}
+                                            title={max > 0 ? `${v.label}: ${value} de ${max}` : `${v.label}: não se aplica a este cliente`}
+                                        >
+                                            <div className={`h-full ${v.fill}`} style={{ width: `${percent}%` }}></div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
 

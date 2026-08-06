@@ -1,5 +1,12 @@
 import { TimeEntry, EmployeeConfig, ClientConfig, ClientSummary, EmployeeSummary, DashboardSummary, DepartmentSummary, DepartmentType, ClientCategory } from '../types';
 
+/**
+ * Prazo padrão de implementação, em meses, quando o cliente não tem
+ * `implementationMonths` configurado. Define em quantas parcelas o fee de
+ * setup é reconhecido.
+ */
+export const DEFAULT_IMPLEMENTATION_MONTHS = 3;
+
 // Helper: "01:30" -> 1.5
 export const timeToDecimal = (timeStr: string): number => {
   if (!timeStr) return 0;
@@ -294,27 +301,32 @@ export const calculateSummary = (
         category = config.category;
         isActive = config.isActive;
         
-        // One Time Fee Logic:
-        // Se houver um OneTimeFee configurado E o intervalo filtrado incluir a data de início do contrato
-        // Se não houver data de início configurada, assumimos que se aplica ao primeiro mês dos dados processados ou filtro
-        let shouldApplyOneTime = false;
-        if (config.oneTimeFee && config.oneTimeFee > 0) {
-            if (config.contractStartDate) {
-                const contractStart = new Date(config.contractStartDate);
-                // Verifica se a data de início do contrato está dentro do range filtrado
-                if (contractStart >= start && contractStart <= end) {
-                    shouldApplyOneTime = true;
-                }
-            } else {
-                // Fallback: Se não tem data de contrato, aplica se o filtro estiver no início dos tempos (ex: é a primeira vez que aparece)
-                // Para simplificar, vamos aplicar pro-rata se estivermos olhando para um período longo, mas o ideal é ter a data.
-                // Como regra simples: Se não tiver data de contrato, NÃO aplicamos automaticamente para evitar duplicação em filtros futuros.
-                // O usuário deve definir a data de início.
-            }
-        }
+        // One Time Fee (Implementação/Setup) — reconhecimento por competência.
+        //
+        // O setup é entregue ao longo de vários meses, então lançar 100% da
+        // receita no mês de início descasava receita e custo: a margem do mês 1
+        // estourava e a dos meses seguintes afundava, sem que nada tivesse
+        // mudado na operação. Aqui o valor é diluído em `implementationMonths`
+        // (padrão 3) a partir do mês do início do contrato.
+        //
+        // Sem data de início do contrato não há como saber a janela, então nada
+        // é reconhecido — o usuário precisa preencher a data em Configurações.
+        if (config.oneTimeFee && config.oneTimeFee > 0 && config.contractStartDate) {
+            const months = Math.max(1, Math.round(config.implementationMonths ?? DEFAULT_IMPLEMENTATION_MONTHS));
+            const contractStart = new Date(config.contractStartDate + 'T00:00:00');
+            const startMonthIndex = contractStart.getFullYear() * 12 + contractStart.getMonth();
+            const perMonth = config.oneTimeFee / months;
 
-        if (shouldApplyOneTime) {
-            realizedOneTimeFee = config.oneTimeFee || 0;
+            activeMonths.forEach(m => {
+                const [y, mo] = m.split('-').map(Number);
+                const offset = (y * 12 + (mo - 1)) - startMonthIndex;
+                if (offset >= 0 && offset < months) {
+                    // Mesmo pro-rata do fee recorrente: filtrar meio mês mostra
+                    // metade da parcela reconhecida naquele mês.
+                    realizedOneTimeFee += perMonth * getProRataRatio(m);
+                }
+            });
+
             totalFee += realizedOneTimeFee;
         }
 

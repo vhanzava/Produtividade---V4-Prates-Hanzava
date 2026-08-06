@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { EmployeeConfig, ClientConfig, DepartmentType, ClientCategory, ClientCategory as Vertical } from '../types';
 import { Save, User, Briefcase, Plus, Archive, RefreshCw, Calendar, FileText, Loader, Upload, UserX } from 'lucide-react';
 import { extractContractData } from '../services/contractParser';
+import { DEFAULT_IMPLEMENTATION_MONTHS } from '../services/dataProcessor';
 
 interface SettingsProps {
   employees: EmployeeConfig[];
@@ -149,6 +150,10 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
         }
     } else if (field === 'oneTimeFee') {
          client.oneTimeFee = parseFloat(value) || 0;
+    } else if (field === 'implementationMonths') {
+         // Mínimo 1: zero meses dividiria o setup por zero.
+         const months = Math.round(parseFloat(value));
+         client.implementationMonths = Number.isFinite(months) && months >= 1 ? months : DEFAULT_IMPLEMENTATION_MONTHS;
     } else {
         // @ts-ignore
         client[field] = value;
@@ -551,6 +556,9 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Fee Recorrente {selectedMonth !== 'default' && '(Mês)'}
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" title="Em quantos meses a implementação é entregue. O valor de setup é reconhecido diluído nessa janela, a partir da data de início do contrato.">
+                        Meses impl.
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Setup (One-Time)
                     </th>
@@ -631,6 +639,17 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     className={INPUT_STYLE}
                                     value={getClientFee(client)}
                                     onChange={(e) => handleClientChange(realIndex, 'monthlyFee', e.target.value)}
+                                />
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <input
+                                    type="number"
+                                    min={1}
+                                    step={1}
+                                    className={INPUT_STYLE}
+                                    value={client.implementationMonths ?? DEFAULT_IMPLEMENTATION_MONTHS}
+                                    onChange={(e) => handleClientChange(realIndex, 'implementationMonths', e.target.value)}
+                                    title="Use 1 para reconhecer o setup integralmente no mês de início do contrato."
                                 />
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
