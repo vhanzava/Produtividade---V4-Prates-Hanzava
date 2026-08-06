@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.vercel/
+
+# Segredos: .env.example é versionado, os .env reais não.
+.env
+.env.local
+.env.*.local
+
+*.log
+.DS_Store

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { parseCSV, calculateSummary } from './services/dataProcessor';
 import { TimeEntry, EmployeeConfig, ClientConfig, UserSession, SystemBackup, HealthInput } from './types';
 import FileUpload from './components/FileUpload';
+import EkyteSync from './components/EkyteSync';
+import { EkyteSyncResult } from './services/ekyteSync';
 import Dashboard from './components/Dashboard';
 import Settings from './components/Settings';
 import Login from './components/Login';
@@ -10,6 +12,10 @@ import { LayoutDashboard, Settings as SettingsIcon, LogOut, RefreshCw, Cloud, Cl
 import { supabase } from './lib/supabase';
 
 const DATE_INPUT_STYLE = "bg-gray-700 text-white border-gray-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm p-1 border";
+// Variante clara para o card de estado vazio (fundo branco). Constante separada
+// em vez de sobrescrever a de cima: com o Tailwind via CDN, classes conflitantes
+// são resolvidas pela ordem da folha de estilo, não pela ordem no atributo.
+const DATE_INPUT_STYLE_LIGHT = "bg-white text-gray-800 border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm p-1 border";
 
 const App: React.FC = () => {
   // Auth State
@@ -38,11 +44,22 @@ const App: React.FC = () => {
   // @ts-ignore
   const isOfflineMode = !supabase.supabaseUrl || supabase.supabaseUrl.includes('placeholder');
 
+  // Sem dados carregados não há período de onde inferir o filtro. Assume o mês
+  // corrente para que a sincronização com o eKyte já nasça utilizável.
+  const applyDefaultPeriod = () => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    setStartDate(prev => prev || fmt(new Date(now.getFullYear(), now.getMonth(), 1)));
+    setEndDate(prev => prev || fmt(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
+  };
+
   // Initial Load from Cloud
   useEffect(() => {
     if (session?.isAuthenticated) {
         if (isOfflineMode) {
             console.log("App em Modo Offline: Pulando busca inicial de dados.");
+            applyDefaultPeriod();
             return;
         }
         fetchCloudData();
@@ -295,6 +312,7 @@ const App: React.FC = () => {
                   setEntries([]);
                   setEmployees([]);
                   setClients([]);
+                  applyDefaultPeriod();
                   return;
               }
               throw error;
@@ -314,6 +332,8 @@ const App: React.FC = () => {
                   const dates = loadedEntries.map((e: TimeEntry) => e.date.getTime());
                   setStartDate(new Date(Math.min(...dates)).toISOString().split('T')[0]);
                   setEndDate(new Date(Math.max(...dates)).toISOString().split('T')[0]);
+              } else if (loadedEntries.length === 0) {
+                  applyDefaultPeriod();
               }
               
               if (data.updated_at) {
@@ -331,17 +351,18 @@ const App: React.FC = () => {
   };
 
   const saveToCloud = async (
-      newEntries: TimeEntry[], 
-      newEmps: EmployeeConfig[], 
-      newClients: ClientConfig[]
+      newEntries: TimeEntry[],
+      newEmps: EmployeeConfig[],
+      newClients: ClientConfig[],
+      successMsg?: string
   ) => {
       if (!session?.isMaster) return;
 
       // Em modo offline/teste, simulamos o salvamento
       if (isOfflineMode) {
           setLastSync(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
-          setStatusMsg("Ambiente de Teste: Dados atualizados localmente.");
-          setTimeout(() => setStatusMsg(null), 3000);
+          setStatusMsg(successMsg || "Ambiente de Teste: Dados atualizados localmente.");
+          setTimeout(() => setStatusMsg(null), 5000);
           return;
       }
 
@@ -360,8 +381,8 @@ const App: React.FC = () => {
           if (error) throw error;
           
           setLastSync(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
-          setStatusMsg("Dados sincronizados com a nuvem!");
-          setTimeout(() => setStatusMsg(null), 3000);
+          setStatusMsg(successMsg || "Dados sincronizados com a nuvem!");
+          setTimeout(() => setStatusMsg(null), successMsg ? 6000 : 3000);
 
       } catch (err: any) {
           console.error("Erro ao salvar:", err);
@@ -371,26 +392,29 @@ const App: React.FC = () => {
       }
   };
 
-  // -- CSV Import Logic (Merge) --
-  const handleDataLoaded = (csvContent: string) => {
-    const newEntries = parseCSV(csvContent);
-    if (newEntries.length === 0) {
-        setStatusMsg("Nenhum dado encontrado no CSV.");
-        setTimeout(() => setStatusMsg(null), 3000);
-        return;
-    }
-
-    const newDates = newEntries.map(e => e.date.getTime());
-    const minNewDate = Math.min(...newDates);
-    const maxNewDate = Math.max(...newDates);
-
+  // -- Ingestão de apontamentos (compartilhada entre CSV e eKyte) --
+  //
+  // Substitui tudo que já existia dentro da janela [rangeStart, rangeEnd] pelos
+  // registros recém-chegados — a origem é a fonte da verdade para aquele período —
+  // e cadastra automaticamente executores e workspaces ainda desconhecidos.
+  const ingestEntries = (
+      newEntries: TimeEntry[],
+      rangeStart: number,
+      rangeEnd: number,
+      options?: { workspaceStatus?: Map<string, boolean>; buildMessage?: (added: { newEmps: number; newClients: number }) => string }
+  ) => {
+    const workspaceStatus = options?.workspaceStatus;
     const nonOverlappingEntries = entries.filter(e => {
         const t = e.date.getTime();
-        return t < minNewDate || t > maxNewDate;
+        return t < rangeStart || t > rangeEnd;
     });
 
-    const mergedEntries = [...nonOverlappingEntries, ...newEntries];
-    
+    // Dedupe por id: apontamentos do eKyte têm id estável, então sincronizar
+    // períodos sobrepostos não duplica horas.
+    const byId = new Map<string, TimeEntry>();
+    [...nonOverlappingEntries, ...newEntries].forEach(e => byId.set(e.id, e));
+    const mergedEntries = Array.from(byId.values());
+
     const uniqueExecutors = Array.from(new Set(newEntries.map(e => e.executor)));
     const uniqueWorkspaces = Array.from(new Set(newEntries.map(e => e.workspace)));
 
@@ -415,7 +439,9 @@ const App: React.FC = () => {
          if (!existingClientMap.has(name)) {
             newClientsList.push({
                 name,
-                isActive: true,
+                // Só vale para clientes novos: o isActive de quem já está
+                // cadastrado é decisão comercial e não é sobrescrito pelo eKyte.
+                isActive: workspaceStatus?.get(name) ?? true,
                 category: 'Executar',
                 defaultFee: 0,
                 history: {}
@@ -428,10 +454,52 @@ const App: React.FC = () => {
     setEmployees(updatedEmps);
     setClients(updatedClients);
 
+    const added = { newEmps: newEmps.length, newClients: newClientsList.length };
+    saveToCloud(mergedEntries, updatedEmps, updatedClients, options?.buildMessage?.(added));
+
+    return added;
+  };
+
+  // -- CSV Import Logic (Merge) --
+  const handleDataLoaded = (csvContent: string) => {
+    const newEntries = parseCSV(csvContent);
+    if (newEntries.length === 0) {
+        setStatusMsg("Nenhum dado encontrado no CSV.");
+        setTimeout(() => setStatusMsg(null), 3000);
+        return;
+    }
+
+    const newDates = newEntries.map(e => e.date.getTime());
+    const minNewDate = Math.min(...newDates);
+    const maxNewDate = Math.max(...newDates);
+
+    ingestEntries(newEntries, minNewDate, maxNewDate);
+
     setStartDate(new Date(minNewDate).toISOString().split('T')[0]);
     setEndDate(new Date(maxNewDate).toISOString().split('T')[0]);
-    
-    saveToCloud(mergedEntries, updatedEmps, updatedClients);
+  };
+
+  // -- Sincronização direta com o eKyte --
+  const handleEkyteSynced = (result: EkyteSyncResult) => {
+    const rangeStart = new Date(startDate + 'T00:00:00').getTime();
+    const rangeEnd = new Date(endDate + 'T23:59:59').getTime();
+
+    if (result.stats.imported === 0) {
+        setStatusMsg("eKyte: nenhum apontamento encontrado no período selecionado.");
+        setTimeout(() => setStatusMsg(null), 5000);
+        return;
+    }
+
+    ingestEntries(result.entries, rangeStart, rangeEnd, {
+        workspaceStatus: new Map(result.workspaces.map(w => [w.name, w.isActive])),
+        buildMessage: ({ newEmps, newClients }) => {
+            const extras: string[] = [];
+            if (newEmps > 0) extras.push(`${newEmps} novo(s) colaborador(es)`);
+            if (newClients > 0) extras.push(`${newClients} novo(s) cliente(s)`);
+            return `eKyte: ${result.stats.imported} apontamento(s) importado(s)` +
+                (extras.length > 0 ? ` — ${extras.join(', ')}` : '');
+        }
+    });
   };
 
   // -- Backup Import Logic (Replace All) --
@@ -598,7 +666,8 @@ const App: React.FC = () => {
                              <input type="date" className={DATE_INPUT_STYLE} value={endDate} onChange={e => setEndDate(e.target.value)} />
                              
                              {session.isMaster && (
-                                 <div className="ml-2">
+                                 <div className="ml-2 flex items-center gap-2">
+                                    <EkyteSync startDate={startDate} endDate={endDate} onSynced={handleEkyteSynced} />
                                     <FileUpload onDataLoaded={handleDataLoaded} onBackupLoaded={handleBackupLoaded} />
                                  </div>
                              )}
@@ -636,12 +705,18 @@ const App: React.FC = () => {
                     
                     {session.isMaster || isOfflineMode ? (
                         <>
-                            <p className="mt-2 text-gray-500 mb-8 text-sm leading-relaxed">
-                                {isOfflineMode 
-                                 ? "Este ambiente não possui conexão com banco de dados. Importe seus dados para testar a interface localmente." 
-                                 : "O banco de dados está vazio ou não conectado. Importe uma planilha ou um backup para iniciar e sincronizar."}
+                            <p className="mt-2 text-gray-500 mb-6 text-sm leading-relaxed">
+                                {isOfflineMode
+                                 ? "Este ambiente não possui conexão com banco de dados. Sincronize com o eKyte ou importe seus dados para testar a interface localmente."
+                                 : "O banco de dados está vazio ou não conectado. Puxe os apontamentos direto do eKyte ou importe uma planilha/backup para iniciar."}
                             </p>
-                            <div className="flex justify-center">
+                            <div className="flex items-center justify-center gap-2 mb-4">
+                                <input type="date" className={DATE_INPUT_STYLE_LIGHT} value={startDate} onChange={e => setStartDate(e.target.value)} />
+                                <span className="text-gray-400 text-xs">até</span>
+                                <input type="date" className={DATE_INPUT_STYLE_LIGHT} value={endDate} onChange={e => setEndDate(e.target.value)} />
+                            </div>
+                            <div className="flex flex-wrap justify-center items-center gap-3">
+                                <EkyteSync startDate={startDate} endDate={endDate} onSynced={handleEkyteSynced} />
                                 <FileUpload onDataLoaded={handleDataLoaded} onBackupLoaded={handleBackupLoaded} />
                             </div>
                         </>
