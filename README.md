@@ -64,9 +64,42 @@ entra em deploy novo. A pasta `api/` vira Serverless Function automaticamente.
 
 ## Acesso
 
-O login é do Supabase: e-mail e senha, contas criadas em **Authentication →
-Users** no painel. Sem sessão válida o banco não responde e o `/api/ekyte`
-devolve 401.
+O login é por **link mágico**: a pessoa digita o e-mail, recebe um link e entra
+com um clique. Não há senha para criar, esquecer ou vazar. Sem sessão válida o
+banco não responde e o `/api/ekyte` devolve 401.
+
+### Dar acesso a alguém
+
+**Authentication → Users → Add user**, com **Auto Confirm User** marcado. A
+senha pedida no formulário pode ser qualquer coisa — ninguém vai usá-la, o
+acesso é pelo link. Só isso: a pessoa já consegue pedir o link na tela de login.
+
+O login recusa quem não tem conta (`shouldCreateUser: false`). Isso é
+deliberado: `@v4company.com` é o domínio de toda a rede V4, não só desta
+unidade — sem essa trava, qualquer franquia entraria sozinha.
+
+### Configuração obrigatória no Supabase
+
+**Authentication → URL Configuration:**
+
+- **Site URL:** `https://produtividade-v4-prates-hanzava.vercel.app`
+- **Redirect URLs:** a mesma acima, mais `http://localhost:5173` para o dev
+
+Sem isso o link do e-mail aponta para o lugar errado e o login não completa.
+
+### SMTP próprio (necessário na prática)
+
+O servidor de e-mail embutido do Supabase libera poucas mensagens por hora e é
+explicitamente destinado só a testes. Com ele, onboardar a operação inteira
+falha no meio. Em **Authentication → Emails → SMTP Settings**, aponte para um
+provedor próprio — [Resend](https://resend.com) tem plano gratuito suficiente
+para este volume.
+
+### Entrar com senha
+
+A tela tem um atalho discreto de login por senha. É saída de emergência: se o
+envio de e-mail parar, o link mágico para junto e ninguém entra. Vale manter
+uma conta com senha definida para essa situação.
 
 As permissões continuam derivadas do e-mail, em
 [`services/auth.ts`](services/auth.ts): todo mundo da operação enxerga; editar

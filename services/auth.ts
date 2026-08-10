@@ -41,9 +41,17 @@ export const buildSession = (email: string): UserSession => {
 export const translateAuthError = (message: string): string => {
   const m = message.toLowerCase();
   if (m.includes('invalid login credentials')) return 'E-mail ou senha incorretos.';
-  if (m.includes('email not confirmed')) return 'E-mail ainda não confirmado. Verifique sua caixa de entrada.';
-  if (m.includes('too many requests') || m.includes('rate limit')) {
-    return 'Muitas tentativas seguidas. Aguarde um minuto e tente de novo.';
+  if (m.includes('email not confirmed')) return 'E-mail ainda não confirmado. Peça ao administrador para confirmar sua conta.';
+  // `shouldCreateUser: false` faz o Supabase recusar quem não tem conta.
+  if (m.includes('signups not allowed') || m.includes('user not found')) {
+    return 'Esse e-mail não tem acesso à ferramenta. Peça ao administrador para criar sua conta.';
+  }
+  // O SMTP embutido do Supabase libera poucos e-mails por hora.
+  if (m.includes('rate limit') || m.includes('too many requests') || m.includes('over_email_send_rate')) {
+    return 'Limite de envio de e-mails atingido. Aguarde alguns minutos e tente de novo.';
+  }
+  if (m.includes('error sending') || m.includes('smtp')) {
+    return 'Falha no envio do e-mail. Avise o administrador — pode ser configuração de SMTP.';
   }
   if (m.includes('failed to fetch') || m.includes('network')) {
     return 'Sem conexão com o servidor de autenticação.';
