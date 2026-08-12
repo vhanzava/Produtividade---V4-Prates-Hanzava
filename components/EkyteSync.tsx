@@ -47,14 +47,25 @@ const EkyteSync: React.FC<EkyteSyncProps> = ({ startDate, endDate, onSynced }) =
         <RefreshCw size={14} className={isSyncing ? 'animate-spin' : undefined} />
         <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar eKyte'}</span>
       </button>
+      {/* Erro em popover em vez de truncado na barra: a causa costuma estar no
+          fim da frase (qual variável falta, qual recurso deu erro), justamente
+          o pedaço que o truncamento comia. */}
       {error && (
-        <span
-          className="text-red-600 text-xs flex items-center bg-red-50 px-2 py-1 rounded border border-red-100 max-w-xs"
-          title={error}
-        >
-          <AlertCircle size={12} className="mr-1 shrink-0" />
-          <span className="truncate">{error}</span>
-        </span>
+        <div className="relative">
+          <span className="text-red-600 text-xs flex items-center bg-red-50 px-2 py-1 rounded border border-red-200 whitespace-nowrap">
+            <AlertCircle size={12} className="mr-1 shrink-0" />
+            Falha ao sincronizar
+          </span>
+          <div className="absolute right-0 top-full mt-1 z-30 w-96 bg-white border border-red-200 rounded-md shadow-lg p-3">
+            <p className="text-xs text-red-700 leading-relaxed break-words">{error}</p>
+            <button
+              onClick={() => setError(null)}
+              className="mt-2 text-[11px] text-gray-400 hover:text-gray-600"
+            >
+              fechar
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

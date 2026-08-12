@@ -168,30 +168,39 @@ export interface EkyteHandlerResult {
 }
 
 /**
+ * Resultado da checagem de sessão.
+ *
+ * `misconfigured` existe separado de propósito: os dois casos negam o acesso,
+ * mas confundi-los manda a pessoa relogar eternamente quando o problema é
+ * variável de ambiente faltando no servidor.
+ */
+type AuthOutcome = 'ok' | 'invalid' | 'misconfigured';
+
+/**
  * Confere se o token pertence a uma sessão válida do Supabase.
  *
  * O endpoint estava aberto: qualquer um com a URL puxava todos os dados do
- * eKyte da empresa. Aqui a checagem é delegada ao próprio Supabase — não
- * guardamos segredo de JWT nem reimplementamos validação de assinatura, que é
- * onde esse tipo de código costuma errar.
+ * eKyte da empresa. A checagem é delegada ao próprio Supabase — não guardamos
+ * segredo de JWT nem reimplementamos validação de assinatura, que é onde esse
+ * tipo de código costuma errar.
  */
-const isAuthenticated = async (token: string | undefined): Promise<boolean> => {
-  if (!token) return false;
-
-  const supabaseUrl = process.env.SUPABASE_URL;
+const checkAuth = async (token: string | undefined): Promise<AuthOutcome> => {
+  const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/+$/, '');
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-  // Sem as variáveis o proxy não tem como validar. Nega — falhar fechado é o
-  // comportamento certo aqui; falhar aberto reabriria o buraco silenciosamente.
-  if (!supabaseUrl || !supabaseAnonKey) return false;
+  // Sem as variáveis não há como validar. Nega — falhar aberto reabriria o
+  // buraco em silêncio — mas diz que o problema é de configuração.
+  if (!supabaseUrl || !supabaseAnonKey) return 'misconfigured';
+  if (!token) return 'invalid';
 
   try {
     const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
       headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` },
     });
-    return response.ok;
+    return response.ok ? 'ok' : 'invalid';
   } catch {
-    return false;
+    // Supabase fora do ar não é sessão inválida.
+    return 'misconfigured';
   }
 };
 
@@ -209,7 +218,18 @@ export const handleEkyteRequest = async (
   query: Query,
   authorizationHeader?: string,
 ): Promise<EkyteHandlerResult> => {
-  if (!(await isAuthenticated(bearerToken(authorizationHeader)))) {
+  const auth = await checkAuth(bearerToken(authorizationHeader));
+  if (auth === 'misconfigured') {
+    return {
+      status: 503,
+      body: {
+        error:
+          'O proxy não consegue validar a sessão: faltam SUPABASE_URL e SUPABASE_ANON_KEY ' +
+          'nas variáveis de ambiente do servidor (marque Production e faça o redeploy).',
+      },
+    };
+  }
+  if (auth === 'invalid') {
     return { status: 401, body: { error: 'Sessão inválida ou expirada. Faça login novamente.' } };
   }
 
