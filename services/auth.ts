@@ -1,4 +1,5 @@
 import { UserSession } from '../types';
+import { supabase } from '../lib/supabase';
 
 // Autenticação da ferramenta.
 //
@@ -18,9 +19,8 @@ const HEALTH_SCORE_EDITORS = [
 ];
 
 /**
- * Permissões derivadas do e-mail. A autenticação diz QUEM é a pessoa; isto
- * define o que ela pode fazer. Todo mundo da operação enxerga a ferramenta;
- * edição é restrita.
+ * Permissões a partir da lista embutida. Usada só como retaguarda — a fonte da
+ * verdade é a tabela `allowed_users`, ver `fetchAccess`.
  */
 export const buildSession = (email: string): UserSession => {
   const normalized = email.trim().toLowerCase();
@@ -35,6 +35,62 @@ export const buildSession = (email: string): UserSession => {
       canEditProductivity: isMaster,
     },
   };
+};
+
+export type AccessResult =
+  | { status: 'ok'; session: UserSession }
+  /** Autenticou, mas o e-mail não está na lista de autorizados. */
+  | { status: 'denied' }
+  /** Não deu para verificar (rede/servidor); não é o mesmo que negar. */
+  | { status: 'error'; message: string };
+
+/**
+ * Decide se este e-mail tem acesso, consultando `allowed_users`.
+ *
+ * Estar autenticado não basta: `@v4company.com` é o domínio de toda a rede V4,
+ * não só desta unidade, e o login permite que a conta se crie sozinha. Quem
+ * autoriza de fato é a RLS no banco — esta consulta existe para a tela poder
+ * dizer "você não tem acesso" em vez de mostrar uma ferramenta vazia.
+ */
+export const fetchAccess = async (email: string): Promise<AccessResult> => {
+  const normalized = email.trim().toLowerCase();
+
+  try {
+    const { data, error } = await supabase
+      .from('allowed_users')
+      .select('is_master, can_edit_health_score, can_edit_productivity')
+      .eq('email', normalized)
+      .maybeSingle();
+
+    if (error) {
+      // A tabela ainda não existe: o SQL de controle de acesso não rodou.
+      // Cair na lista embutida evita trancar todo mundo para fora entre o
+      // deploy do código e a execução do script. Seguro porque quem de fato
+      // libera os dados é a RLS, não esta checagem.
+      if (error.code === '42P01' || /does not exist/i.test(error.message)) {
+        console.warn('[auth] tabela allowed_users ausente; usando lista embutida.');
+        return { status: 'ok', session: buildSession(normalized) };
+      }
+      return { status: 'error', message: error.message };
+    }
+
+    if (!data) return { status: 'denied' };
+
+    return {
+      status: 'ok',
+      session: {
+        email: normalized,
+        isMaster: !!data.is_master,
+        isAuthenticated: true,
+        permissions: {
+          canEditHealthScore: !!data.can_edit_health_score || !!data.is_master,
+          canEditProductivity: !!data.can_edit_productivity || !!data.is_master,
+        },
+      },
+    };
+  } catch (err: any) {
+    return { status: 'error', message: err?.message || 'Falha ao verificar o acesso.' };
+  }
 };
 
 /** Mensagens do Supabase são em inglês e genéricas; traduz as mais comuns. */

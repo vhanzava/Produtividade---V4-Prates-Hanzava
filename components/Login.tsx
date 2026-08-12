@@ -60,10 +60,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         email: normalizedEmail,
         options: {
           emailRedirectTo: window.location.origin,
-          // Sem isto, qualquer e-mail @v4company.com criaria conta sozinho — e
-          // esse domínio é de toda a rede V4, não só desta unidade. Só quem já
-          // foi cadastrado entra.
-          shouldCreateUser: false,
+          // A conta se cria no primeiro acesso — assim ninguém precisa
+          // cadastrar 13 pessoas na mão. Isso NÃO abre a base: quem autoriza é
+          // a tabela `allowed_users` via RLS, e `@v4company.com` é o domínio de
+          // toda a rede V4. Quem não está na lista consegue no máximo um login
+          // vazio, e a tela avisa isso explicitamente.
+          shouldCreateUser: true,
         },
       });
 

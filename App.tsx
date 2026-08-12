@@ -8,9 +8,9 @@ import Dashboard from './components/Dashboard';
 import Settings from './components/Settings';
 import Login from './components/Login';
 import HealthDashboard from './components/HealthDashboard';
-import { LayoutDashboard, Settings as SettingsIcon, LogOut, RefreshCw, Cloud, CloudOff, Info, HeartPulse, BarChart2, Loader } from 'lucide-react';
+import { LayoutDashboard, Settings as SettingsIcon, LogOut, RefreshCw, Cloud, CloudOff, Info, HeartPulse, BarChart2, Loader, ShieldAlert } from 'lucide-react';
 import { supabase } from './lib/supabase';
-import { buildSession } from './services/auth';
+import { buildSession, fetchAccess } from './services/auth';
 
 const DATE_INPUT_STYLE = "bg-gray-700 text-white border-gray-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm p-1 border";
 // Variante clara para o card de estado vazio (fundo branco). Constante separada
@@ -25,18 +25,42 @@ const App: React.FC = () => {
   // tela piscar a cada refresh mesmo com o usuário já logado.
   const [isRestoringSession, setIsRestoringSession] = useState(true);
 
+  // Autenticado mas fora da lista de autorizados. Merece tela própria: sem ela
+  // a pessoa veria a ferramenta vazia e acharia que está quebrada.
+  const [accessDenied, setAccessDenied] = useState(false);
+
   // Restaura a sessão do Supabase (fica no storage do browser) e acompanha
   // logout/expiração vindos de qualquer aba.
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      const email = data.session?.user?.email;
-      if (email) setSession(buildSession(email));
+    const resolveAccess = async (email: string | undefined) => {
+      if (!email) {
+        setSession(null);
+        setAccessDenied(false);
+        return;
+      }
+      const access = await fetchAccess(email);
+      if (access.status === 'ok') {
+        setSession(access.session);
+        setAccessDenied(false);
+      } else if (access.status === 'denied') {
+        setSession(null);
+        setAccessDenied(true);
+      } else {
+        // Falha de rede não é negativa de acesso: manter a pessoa logada com as
+        // permissões da lista embutida é melhor que expulsá-la por instabilidade.
+        console.error('[auth] não foi possível verificar o acesso:', access.message);
+        setSession(buildSession(email));
+        setAccessDenied(false);
+      }
+    };
+
+    supabase.auth.getSession().then(async ({ data }) => {
+      await resolveAccess(data.session?.user?.email);
       setIsRestoringSession(false);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, authSession) => {
-      const email = authSession?.user?.email;
-      setSession(email ? buildSession(email) : null);
+      resolveAccess(authSession?.user?.email);
     });
 
     return () => listener.subscription.unsubscribe();
@@ -45,6 +69,7 @@ const App: React.FC = () => {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
+    setAccessDenied(false);
   };
 
   // App State
@@ -574,6 +599,32 @@ const App: React.FC = () => {
       return (
           <div className="min-h-screen flex items-center justify-center bg-gray-50">
               <Loader className="h-6 w-6 text-gray-400 animate-spin" />
+          </div>
+      );
+  }
+
+  if (accessDenied) {
+      return (
+          <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+              <div className="max-w-md w-full bg-white p-10 rounded-xl shadow-lg border border-gray-100 text-center space-y-4">
+                  <div className="mx-auto h-12 w-12 bg-amber-100 flex items-center justify-center rounded-full">
+                      <ShieldAlert className="h-6 w-6 text-amber-700" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900">Acesso não liberado</h2>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                      Seu login funcionou, mas este e-mail ainda não está na lista de
+                      pessoas autorizadas a ver os dados da operação.
+                  </p>
+                  <p className="text-xs text-gray-400">
+                      Peça a liberação ao administrador da ferramenta.
+                  </p>
+                  <button
+                      onClick={handleLogout}
+                      className="text-sm text-red-700 hover:text-red-800 font-medium"
+                  >
+                      Sair e tentar outro e-mail
+                  </button>
+              </div>
           </div>
       );
   }
