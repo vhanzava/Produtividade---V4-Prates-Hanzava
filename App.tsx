@@ -547,8 +547,17 @@ const App: React.FC = () => {
             const extras: string[] = [];
             if (newEmps > 0) extras.push(`${newEmps} novo(s) colaborador(es)`);
             if (newClients > 0) extras.push(`${newClients} novo(s) cliente(s)`);
+
+            // Apontamento sem executor some do custo; sem workspace não casa com
+            // cliente nenhum. Avisar é essencial: da primeira vez isso passou
+            // despercebido e 118h foram parar numa linha "Sem executor".
+            const alertas: string[] = [];
+            if (result.stats.semExecutor > 0) alertas.push(`${result.stats.semExecutor} sem executor`);
+            if (result.stats.semWorkspace > 0) alertas.push(`${result.stats.semWorkspace} sem workspace`);
+
             return `eKyte: ${result.stats.imported} apontamento(s) importado(s)` +
-                (extras.length > 0 ? ` — ${extras.join(', ')}` : '');
+                (extras.length > 0 ? ` — ${extras.join(', ')}` : '') +
+                (alertas.length > 0 ? ` ⚠️ Atenção: ${alertas.join(', ')}` : '');
         }
     });
   };

@@ -19,14 +19,25 @@ const PROXY_URL = '/api/ekyte';
  */
 const BUFFER_DAYS = 15;
 
+/**
+ * `executor` e `workspace` chegam ora como texto, ora como objeto: a API REST
+ * devolve o nome direto, enquanto o MCP do eKyte expande em objeto. Assumir só
+ * uma das formas fazia todo apontamento cair no fallback "Sem executor" — 118h
+ * empilhadas numa linha só e custo zerado, porque sem executor não há
+ * colaborador para casar com custo/hora.
+ */
+type EkyteRef = string | { id?: string | number; name?: string; userName?: string; username?: string; email?: string } | null;
+
 interface EkyteTimeTracking {
   id: number;
   effort?: number; // minutos
   startDate?: string;
   endDate?: string;
   comment?: string;
-  executor?: { id?: string; userName?: string; email?: string } | null;
-  workspace?: { id?: number; name?: string; active?: number } | null;
+  executor?: EkyteRef;
+  executorId?: string;
+  workspace?: EkyteRef;
+  workspaceId?: number;
   ctcTask?: { id?: number; title?: string } | null;
 }
 
@@ -36,7 +47,27 @@ interface EkyteWorkspace {
   active?: number;
 }
 
+interface EkyteUser {
+  id?: string;
+  name?: string;
+  username?: string;
+  email?: string;
+}
+
+/** Extrai um nome legível de um campo que pode vir como texto ou objeto. */
+const readRefName = (ref: EkyteRef | undefined, keys: readonly string[]): string | undefined => {
+  if (typeof ref === 'string') return ref.trim() || undefined;
+  if (ref && typeof ref === 'object') {
+    for (const key of keys) {
+      const value = (ref as Record<string, unknown>)[key];
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+  }
+  return undefined;
+};
+
 export interface EkyteWorkspaceInfo {
+  id?: number;
   name: string;
   isActive: boolean;
 }
@@ -50,6 +81,10 @@ export interface EkyteSyncStats {
   skippedNoEffort: number;
   /** Ignorados por terem acontecido fora do período pedido. */
   skippedOutOfRange: number;
+  /** Importados sem nome de executor — vira "Sem executor" e some do custo. */
+  semExecutor: number;
+  /** Importados sem nome de workspace — não casam com nenhum cliente. */
+  semWorkspace: number;
 }
 
 export interface EkyteSyncResult {
@@ -137,6 +172,7 @@ export const fetchEkyteWorkspaces = async (): Promise<EkyteWorkspaceInfo[]> => {
   return raw
     .filter((workspace) => !!workspace.name?.trim())
     .map((workspace) => ({
+      id: workspace.id,
       name: workspace.name!.trim(),
       isActive: workspace.active !== 0,
     }));
@@ -161,13 +197,26 @@ export const syncFromEkyte = async (
     throw new Error('A data inicial não pode ser posterior à data final.');
   }
 
-  const [trackings, workspaces] = await Promise.all([
+  // Usuários e workspaces servem de índice por id: quando o apontamento não
+  // traz o nome embutido, ele é resolvido aqui. Sem isso todo mundo virava
+  // "Sem executor" e as horas colapsavam numa linha só.
+  const [trackings, workspaces, users] = await Promise.all([
     fetchResource<EkyteTimeTracking>('time-trackings', {
       createdFrom: shiftDays(startDate, -BUFFER_DAYS),
       createdTo: shiftDays(endDate, BUFFER_DAYS),
     }),
     fetchEkyteWorkspaces().catch(() => [] as EkyteWorkspaceInfo[]),
+    fetchResource<EkyteUser>('users', {}).catch(() => [] as EkyteUser[]),
   ]);
+
+  const workspaceById = new Map<number, string>();
+  workspaces.forEach(w => { if (w.id !== undefined) workspaceById.set(w.id, w.name); });
+
+  const userById = new Map<string, string>();
+  users.forEach(u => {
+    const nome = u.name?.trim() || u.username?.trim() || u.email?.trim();
+    if (u.id && nome) userById.set(String(u.id), nome);
+  });
 
   const rangeStart = parseEkyteDate(startDate)!;
   const rangeEnd = parseEkyteDate(endDate)!;
@@ -179,6 +228,8 @@ export const syncFromEkyte = async (
     imported: 0,
     skippedNoEffort: 0,
     skippedOutOfRange: 0,
+    semExecutor: 0,
+    semWorkspace: 0,
   };
 
   trackings.forEach((tracking) => {
@@ -195,10 +246,21 @@ export const syncFromEkyte = async (
       return;
     }
 
+    const executor =
+      readRefName(tracking.executor, ['userName', 'name', 'username', 'email']) ??
+      (tracking.executorId ? userById.get(String(tracking.executorId)) : undefined);
+
+    const workspace =
+      readRefName(tracking.workspace, ['name', 'title']) ??
+      (tracking.workspaceId !== undefined ? workspaceById.get(tracking.workspaceId) : undefined);
+
+    if (!executor) stats.semExecutor += 1;
+    if (!workspace) stats.semWorkspace += 1;
+
     entries.push({
       id: `ekyte-${tracking.id}`,
-      executor: tracking.executor?.userName?.trim() || 'Sem executor',
-      workspace: tracking.workspace?.name?.trim() || 'Sem workspace',
+      executor: executor || 'Sem executor',
+      workspace: workspace || 'Sem workspace',
       realizedTime: minutesToHHMM(minutes),
       realizedDecimal: minutes / 60,
       date,
