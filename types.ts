@@ -89,8 +89,15 @@ export interface ClientSummary {
   name: string;
   totalHours: number;
   operationalCost: number;
-  monthlyFee: number; // Sum of fees for the selected period
-  oneTimeFee: number; // Included in revenue logic
+  // Valor CHEIO de contrato reconhecido no período — recorrente + parcela de
+  // implementação. É o número que bate com o PDF do contrato.
+  grossRevenue: number;
+  // O que de fato entra na unidade: bruto menos royalty da matriz e imposto
+  // (e menos o repasse, quando o contrato é de outra origem). É sobre este
+  // valor que lucro e margem são calculados.
+  netRevenue: number;
+  // Parcela de implementação dentro do netRevenue, já líquida.
+  implementationRevenue: number;
   grossProfit: number;
   margin: number;
   isActive: boolean;

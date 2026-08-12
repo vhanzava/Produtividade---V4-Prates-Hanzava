@@ -70,6 +70,29 @@ export const getRepasseRatio = (client: Pick<ClientConfig, 'repassePercent'>): n
   return Math.min(100, Math.max(0, pct)) / 100;
 };
 
+/** Royalty da matriz, em % do valor de contrato. */
+export const MATRIZ_PERCENT = 20;
+
+/** Imposto sobre o faturamento, em %. */
+export const TAX_PERCENT = 6;
+
+/**
+ * Fração do valor de contrato que de fato vira FATURAMENTO da unidade.
+ *
+ * O valor do contrato nunca foi receita: dele saem o royalty da matriz e o
+ * imposto. Trabalhar com o fee cheio superestimava a receita em ~26% e, como o
+ * custo de horas é real, inflava a margem de todo cliente.
+ *
+ * Em contrato de repasse a conta é outra: os 30% recebidos JÁ são líquidos da
+ * matriz, então descontar o royalty de novo cobraria a matriz duas vezes —
+ * ali incide apenas o imposto.
+ */
+export const getNetRevenueRatio = (client: Pick<ClientConfig, 'repassePercent'>): number => {
+  const repasse = getRepasseRatio(client);
+  const deducoes = repasse < 1 ? TAX_PERCENT : MATRIZ_PERCENT + TAX_PERCENT;
+  return repasse * (1 - deducoes / 100);
+};
+
 /** Categoria em que a receita de implementação de um cliente é contabilizada. */
 export const getImplementationCategory = (
   client: Pick<ClientConfig, 'implementationType'>,
@@ -383,8 +406,12 @@ export const calculateSummary = (
     const stat = clientStats.get(name) || { hours: 0, cost: 0 };
     const config = clientMap.get(name);
     
-    let totalFee = 0;
-    let realizedOneTimeFee = 0;
+    // Acumulados em valor CHEIO de contrato — o mesmo que está no PDF, e
+    // portanto auditável linha a linha. A conversão para faturamento acontece
+    // uma vez só, no fim.
+    let grossTotal = 0;
+    let grossOneTime = 0;
+    let netRatio = 1;
     let category: ClientCategory = 'Executar';
     let implementationCategory: ClientCategory = 'Ter';
     let isActive = true;
@@ -393,10 +420,10 @@ export const calculateSummary = (
         category = config.category;
         implementationCategory = getImplementationCategory(config);
         isActive = config.isActive;
-        // Contrato de repasse: só uma fração do valor cheio vira receita nossa.
-        // O custo das horas é integral de qualquer forma, então ignorar isso
-        // mostraria margem que não existe.
-        const repasse = getRepasseRatio(config);
+        // Do valor de contrato saem royalty da matriz e imposto; em contrato de
+        // repasse, só o imposto. O custo das horas é integral de qualquer forma,
+        // então tratar o fee cheio como receita mostrava margem que não existe.
+        netRatio = getNetRevenueRatio(config);
         
         // One Time Fee (Implementação/Setup) — reconhecimento por competência.
         //
@@ -412,7 +439,7 @@ export const calculateSummary = (
             const months = Math.max(1, Math.round(config.implementationMonths ?? DEFAULT_IMPLEMENTATION_MONTHS));
             const contractStart = new Date(config.contractStartDate + 'T00:00:00');
             const startMonthIndex = contractStart.getFullYear() * 12 + contractStart.getMonth();
-            const perMonth = (config.oneTimeFee * repasse) / months;
+            const perMonth = config.oneTimeFee / months;
 
             activeMonths.forEach(m => {
                 const [y, mo] = m.split('-').map(Number);
@@ -420,19 +447,21 @@ export const calculateSummary = (
                 if (offset >= 0 && offset < months) {
                     // Mesmo pro-rata do fee recorrente: filtrar meio mês mostra
                     // metade da parcela reconhecida naquele mês.
-                    realizedOneTimeFee += perMonth * getProRataRatio(m);
+                    grossOneTime += perMonth * getProRataRatio(m);
                 }
             });
 
-            totalFee += realizedOneTimeFee;
+            grossTotal += grossOneTime;
         }
 
         activeMonths.forEach(m => {
             const monthlyFee = config.history[m] !== undefined ? config.history[m] : config.defaultFee;
-            const ratio = getProRataRatio(m);
-            totalFee += monthlyFee * repasse * ratio;
+            grossTotal += monthlyFee * getProRataRatio(m);
         });
     }
+
+    const totalFee = grossTotal * netRatio;
+    const realizedOneTimeFee = grossOneTime * netRatio;
 
     if (stat.hours > 0 || totalFee > 0 || config) {
         const grossProfit = totalFee - stat.cost;
@@ -450,8 +479,9 @@ export const calculateSummary = (
             name,
             totalHours: stat.hours,
             operationalCost: stat.cost,
-            monthlyFee: totalFee,
-            oneTimeFee: realizedOneTimeFee,
+            grossRevenue: grossTotal,
+            netRevenue: totalFee,
+            implementationRevenue: realizedOneTimeFee,
             grossProfit,
             margin,
             isActive,

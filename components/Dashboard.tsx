@@ -107,7 +107,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
   const clientChartData = chartDataRaw.map(c => ({
     name: c.name.length > 15 ? c.name.substring(0, 15) + '...' : c.name,
     Lucro: parseFloat(c.grossProfit.toFixed(2)),
-    Fee: c.monthlyFee,
+    Faturamento: c.netRevenue,
     Custo: parseFloat(c.operationalCost.toFixed(2))
   }));
 
@@ -455,8 +455,11 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleClientSort('operationalCost')}>
                           <div className="flex items-center justify-end">Custo <ClientSortIcon columnKey="operationalCost" /></div>
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleClientSort('monthlyFee')}>
-                          <div className="flex items-center justify-end">Fee <ClientSortIcon columnKey="monthlyFee" /></div>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleClientSort('grossRevenue')} title="Valor cheio de contrato reconhecido no período — o número que bate com o PDF.">
+                          <div className="flex items-center justify-end">Contrato <ClientSortIcon columnKey="grossRevenue" /></div>
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleClientSort('netRevenue')} title="O que entra de fato: contrato menos 20% de matriz e 6% de imposto. Em cliente de repasse, menos o repasse e só o imposto.">
+                          <div className="flex items-center justify-end">Faturamento <ClientSortIcon columnKey="netRevenue" /></div>
                       </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleClientSort('grossProfit')}>
                           <div className="flex items-center justify-end">Lucro <ClientSortIcon columnKey="grossProfit" /></div>
@@ -493,7 +496,8 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500 text-right">{fmtNum(client.totalHours)}h</td>
                         <td className="px-6 py-4 text-sm text-gray-500 text-right">{fmt(client.operationalCost)}</td>
-                        <td className="px-6 py-4 text-sm text-gray-500 text-right">{fmt(client.monthlyFee)}</td>
+                        <td className="px-6 py-4 text-sm text-gray-400 text-right">{fmt(client.grossRevenue)}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700 font-medium text-right">{fmt(client.netRevenue)}</td>
                         <td className={`px-6 py-4 text-sm font-medium text-right ${client.grossProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {fmt(client.grossProfit)}
                         </td>
