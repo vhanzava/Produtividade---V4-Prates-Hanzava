@@ -67,7 +67,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onBackupLoaded })
     <div className="flex items-center gap-2">
       <button 
         onClick={() => fileInputRef.current?.click()}
-        className="flex items-center space-x-2 bg-red-700 hover:bg-red-800 text-white px-3 py-1.5 rounded-md text-sm transition-colors shadow-sm whitespace-nowrap"
+        // Secundário de propósito: o caminho normal é sincronizar com o eKyte.
+        // Dois botões sólidos lado a lado não dizem qual é o principal.
+        className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
         title="Importar Planilha (.csv) ou Backup (.json)"
       >
         <Upload size={14} />

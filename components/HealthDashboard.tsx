@@ -403,7 +403,7 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Vertical Performance */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl border border-gray-200 shadow-card p-6">
                 <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
                     <Activity className="text-purple-600" />
                     Média por Vertical
@@ -448,7 +448,7 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
               </div>
 
               {/* Reminders Card */}
-              <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-card p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <Clock className="text-orange-500" />
@@ -502,7 +502,7 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
           </div>
 
           {/* Client Ranking */}
-          <div className="lg:col-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="lg:col-span-1 bg-white rounded-xl border border-gray-200 shadow-card p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
                   <Activity className="text-blue-500" />
                   Ranking de Saúde
@@ -529,7 +529,7 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
           </div>
 
           {/* Revenue per Flag */}
-          <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-card p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
                   <DollarSign className="text-green-600" />
                   Receita (MRR) em Risco
@@ -557,7 +557,7 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
           </div>
 
           {/* Account Ranking */}
-          <div className="lg:col-span-3 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 shadow-card p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
                   <Users className="text-purple-600" />
                   Ranking por Account Manager
@@ -792,7 +792,7 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
             const score = scores[client.name];
             return (
               <div key={client.name} 
-                   className={`bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all overflow-hidden ${canEdit ? 'cursor-pointer' : 'cursor-default'}`}
+                   className={`bg-white rounded-xl border border-gray-200 shadow-card hover:shadow-md transition-all overflow-hidden ${canEdit ? 'cursor-pointer' : 'cursor-default'}`}
                    onClick={() => handleEdit(client)}
               >
                 <div className="p-5">
@@ -854,7 +854,7 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
       {/* Edit Form */}
       {isEditing && currentInput && (
         <div className="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden animate-fade-in-up">
-          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 sticky top-0 z-10">
+          <div className="px-6 py-3.5 border-b border-gray-200 flex justify-between items-center bg-gray-50 sticky top-0 z-10">
             <div className="flex items-center gap-4">
               <h3 className="text-lg font-bold text-gray-900">Avaliação: {selectedClient}</h3>
               {liveScore && (
@@ -1178,7 +1178,7 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
             </div>
           </div>
 
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3">
+          <div className="px-6 py-3.5 bg-gray-50 border-t border-gray-200 flex justify-end gap-3">
             <button
               onClick={() => setIsEditing(false)}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
@@ -1254,8 +1254,8 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
         const TRACK_FIELDS = Object.keys(FIELD_LABELS);
 
         return (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-card overflow-hidden">
+            <div className="px-6 py-3.5 border-b border-gray-200 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                   <History size={18} className="text-blue-600" />
@@ -1277,7 +1277,7 @@ const HealthDashboard: React.FC<HealthDashboardProps> = ({ clients, savedInputs,
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200 text-sm">
-                  <thead className="bg-gray-50">
+                  <thead className="sticky-head bg-gray-50">
                     <tr>
                       <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data/Hora</th>
                       <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Feito por</th>

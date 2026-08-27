@@ -3,45 +3,77 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ekyte Profitability Analyzer</title>
+    <title>Produtividade · V4 Prates Hanzava</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- IBM Plex Sans: desenhada para interface técnica densa. Algarismos de
+         largura fixa nativos, boa distinção entre 0/O e 1/l/I, e legibilidade
+         em corpo pequeno — que é onde esta ferramenta vive. -->
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         theme: {
           extend: {
-            fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-            },
+            fontFamily: { sans: ['IBM Plex Sans', 'system-ui', 'sans-serif'] },
             colors: {
-              v4: {
-                red: '#CC0000',
-                black: '#000000',
-                gray: '#1A1A1A',
-              }
-            }
+              // Marca: usada em ações e navegação. NUNCA para significar valor
+              // negativo — num painel de lucratividade vermelho já quer dizer
+              // prejuízo, e os dois papéis se confundiam.
+              brand: { 600: '#CC0000', 700: '#A30000', 50: '#FEF2F2' },
+              // Semântica de valor, separada da marca de propósito.
+              pos: { 600: '#047857', 50: '#ECFDF5' },
+              neg: { 600: '#DC2626', 50: '#FEF2F2' },
+            },
+            boxShadow: {
+              // Sombra com deslocamento e desfoque de verdade, não halo.
+              card: '0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.06)',
+              pop:  '0 4px 12px rgba(16,24,40,0.08), 0 2px 4px rgba(16,24,40,0.04)',
+            },
           },
         },
       }
     </script>
     <style>
-      body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+      body {
+        font-family: 'IBM Plex Sans', system-ui, sans-serif;
+        background-color: #f6f7f9;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* Algarismos de largura fixa em TODO dado numérico. Sem isto as colunas
+         de dinheiro desalinham opticamente a cada linha e o olho perde a
+         referência vertical — exatamente o que uma tabela financeira precisa
+         preservar. IBM Plex Sans traz tabular-nums nativo. */
+      table, .tnum {
+        font-variant-numeric: tabular-nums;
+        font-feature-settings: 'tnum' 1;
+      }
+
+      /* Números grandes: o espaçamento padrão fica largo em display. */
+      .metric { letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+
+      /* Foco visível para navegação por teclado — ausente até aqui. */
+      :focus-visible {
+        outline: 2px solid #CC0000;
+        outline-offset: 2px;
+        border-radius: 3px;
+      }
+
+      /* Cabeçalho de tabela fixo: em listas longas de clientes, perder o
+         cabeçalho ao rolar obriga a voltar para lembrar qual coluna é qual. */
+      .sticky-head th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background-color: #fbfcfd;
+        box-shadow: inset 0 -1px 0 #e5e7eb;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+      }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "react/": "https://aistudiocdn.com/react@^19.2.1/",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
-    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
-    "vite": "https://aistudiocdn.com/vite@^7.2.7",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.2",
-    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.87.0",
-    "pdfjs-dist": "https://esm.sh/pdfjs-dist@^5.4.624"
-  }
-}
-</script>
 </head>
   <body>
     <div id="root"></div>

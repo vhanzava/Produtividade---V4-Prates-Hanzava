@@ -37,7 +37,7 @@ const EkyteSync: React.FC<EkyteSyncProps> = ({ startDate, endDate, onSynced }) =
       <button
         onClick={handleSync}
         disabled={isSyncing || !hasPeriod}
-        className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-md text-sm transition-colors shadow-sm whitespace-nowrap"
+        className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white px-3.5 py-2 rounded-lg text-sm font-medium transition-colors shadow-card whitespace-nowrap"
         title={
           hasPeriod
             ? 'Buscar apontamentos direto do eKyte para o período selecionado'

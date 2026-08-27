@@ -12,11 +12,13 @@ import { LayoutDashboard, Settings as SettingsIcon, LogOut, RefreshCw, Cloud, Cl
 import { supabase } from './lib/supabase';
 import { buildSession, fetchAccess } from './services/auth';
 
-const DATE_INPUT_STYLE = "bg-gray-700 text-white border-gray-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm p-1 border";
+// O cabeçalho é claro; campos escuros nele viravam dois retângulos pretos
+// disputando atenção com os botões de ação ao lado.
+const DATE_INPUT_STYLE = "bg-white text-gray-900 border-gray-300 rounded-md focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 sm:text-sm px-2 py-1.5 border tnum";
 // Variante clara para o card de estado vazio (fundo branco). Constante separada
 // em vez de sobrescrever a de cima: com o Tailwind via CDN, classes conflitantes
 // são resolvidas pela ordem da folha de estilo, não pela ordem no atributo.
-const DATE_INPUT_STYLE_LIGHT = "bg-white text-gray-800 border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm p-1 border";
+const DATE_INPUT_STYLE_LIGHT = DATE_INPUT_STYLE;
 
 const App: React.FC = () => {
   // Auth State

@@ -47,7 +47,10 @@ const generateMonthOptions = () => {
 };
 
 const monthOptions = generateMonthOptions();
-const INPUT_STYLE = "bg-gray-700 text-white border-gray-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 block w-full sm:text-sm p-1.5 border";
+// Campos claros. Antes eram bg-gray-700 com texto branco dentro de tabelas de
+// fundo branco: cada input virava um bloco escuro isolado, competindo com o
+// dado da linha em vez de acompanhá-lo.
+const INPUT_STYLE = "bg-white text-gray-900 border-gray-300 rounded-md focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 block w-full sm:text-sm p-1.5 border tnum";
 
 const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmployees, onUpdateClients, canEdit = true }) => {
   const [activeTab, setActiveTab] = useState<'employees' | 'clients'>('employees');
@@ -123,7 +126,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
 
   if (!canEdit) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-card p-8 text-center">
         <UserX className="mx-auto h-12 w-12 text-gray-400 mb-4" />
         <h3 className="text-lg font-medium text-gray-900">Acesso Restrito</h3>
         <p className="text-gray-500 mt-2">Você não tem permissão para editar as configurações de produtividade.</p>
@@ -332,7 +335,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
   });
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-card overflow-hidden">
       <div className="border-b border-gray-200 flex flex-col md:flex-row justify-between items-center bg-gray-50 px-6 py-4 gap-4">
         <div className="flex space-x-4">
           <button
@@ -380,8 +383,8 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
 
       <div className="p-6">
         {selectedMonth !== 'default' && (
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 mb-6">
-                <p className="text-sm text-yellow-700">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-6">
+                <p className="text-sm text-amber-800">
                     <strong>Atenção:</strong> Você está editando valores específicos para <strong>{monthOptions.find(o => o.value === selectedMonth)?.label}</strong>. 
                 </p>
             </div>
@@ -411,18 +414,18 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
             <table className="min-w-full divide-y divide-gray-200">
               <thead>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Departamento</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Verticais</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Início</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Saída</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Nome</th>
+                  <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Departamento</th>
+                  <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Verticais</th>
+                  <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Início</th>
+                  <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Saída</th>
+                  <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">
                       Custo Mensal {selectedMonth !== 'default' && '(Exceção)'}
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">
                       Capacidade (Auto)
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ação</th>
+                  <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Ação</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -431,7 +434,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                   if (churned && !showInactive) return null;
                   return (
                   <tr key={idx} className={churned ? 'bg-gray-50 opacity-70' : ''}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <td className="px-6 py-3.5 whitespace-nowrap text-sm font-medium text-gray-900">
                       <div className="flex flex-col gap-1">
                         <span>{emp.name}</span>
                         {churned && emp.endDate && (
@@ -441,7 +444,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                         <select
                             className={INPUT_STYLE}
                             value={emp.department || 'Outros'}
@@ -457,9 +460,9 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                           const active = (emp.verticals || ['Executar']).includes(v);
                           const vh = emp.verticalHours?.[v] ?? '';
                           const palette = {
-                            Executar: { on: 'bg-red-600 text-white', off: 'bg-gray-100 text-gray-400', ring: 'focus:ring-red-400', border: 'border-red-200' },
-                            Saber:    { on: 'bg-yellow-500 text-white', off: 'bg-gray-100 text-gray-400', ring: 'focus:ring-yellow-400', border: 'border-yellow-200' },
-                            Ter:      { on: 'bg-green-600 text-white', off: 'bg-gray-100 text-gray-400', ring: 'focus:ring-green-400', border: 'border-green-200' },
+                            Executar: { on: 'bg-gray-800 text-white', off: 'bg-gray-100 text-gray-500', ring: 'focus:ring-gray-400', border: 'border-gray-300' },
+                            Saber:    { on: 'bg-amber-500 text-white', off: 'bg-gray-100 text-gray-500', ring: 'focus:ring-amber-400', border: 'border-amber-200' },
+                            Ter:      { on: 'bg-teal-600 text-white', off: 'bg-gray-100 text-gray-500', ring: 'focus:ring-teal-400', border: 'border-teal-200' },
                           }[v];
                           return (
                             <div key={v} className="flex items-center gap-2">
@@ -481,18 +484,18 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     onChange={e => handleEmpVerticalHours(idx, v, e.target.value)}
                                     className={`w-14 text-xs text-center border rounded px-1 py-0.5 bg-white focus:outline-none focus:ring-1 ${palette.ring} ${palette.border}`}
                                   />
-                                  <span className="text-[10px] text-gray-400">h/dia útil</span>
+                                  <span className="text-[11px] text-gray-500">h/dia útil</span>
                                 </div>
                               )}
                               {active && !vh && (
-                                <span className="text-[9px] text-gray-400 italic">padrão 8h</span>
+                                <span className="text-[11px] text-gray-500">padrão 8h</span>
                               )}
                             </div>
                           );
                         })}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                         <input
                             type="date"
                             className={INPUT_STYLE}
@@ -500,7 +503,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                             onChange={(e) => handleEmpChange(idx, 'startDate', e.target.value)}
                         />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                       {churned && emp.endDate
                         ? <span className="text-xs text-gray-500">{new Date(emp.endDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
                         : <input
@@ -511,7 +514,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                           />
                       }
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                       <input
                         type="number"
                         className={INPUT_STYLE}
@@ -519,11 +522,11 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                         onChange={(e) => handleEmpChange(idx, 'monthlyCost', e.target.value)}
                       />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400 italic">
+                    <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                       8h/dia úteis
                     </td>
                     {/* Ação: Dar Saída / Reativar */}
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-3.5 whitespace-nowrap">
                       {churned ? (
                         <button
                           onClick={() => handleReativar(idx)}
@@ -718,28 +721,28 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                 <table className="min-w-full divide-y divide-gray-200">
                 <thead>
                     <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">Contrato</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Início</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500 w-10">Contrato</th>
+                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Início</th>
+                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Status</th>
+                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Nome</th>
+                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Categoria</th>
+                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Account</th>
+                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">
                         Fee Recorrente {selectedMonth !== 'default' && '(Mês)'}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" title="Percentual do valor de contrato que fica com esta unidade. Contrato originado pela matriz ou por outra unidade repassa 30%. Deixe 100 para contrato próprio.">
+                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500" title="Percentual do valor de contrato que fica com esta unidade. Contrato originado pela matriz ou por outra unidade repassa 30%. Deixe 100 para contrato próprio.">
                         Repasse %
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" title="O que foi implementado no contrato. Estruturação e Destrava Receita contam como Saber; setups, implementações e ferramental (site, CRM, landing page) contam como Ter.">
+                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500" title="O que foi implementado no contrato. Estruturação e Destrava Receita contam como Saber; setups, implementações e ferramental (site, CRM, landing page) contam como Ter.">
                         Tipo de impl.
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" title="Em quantos meses a implementação é entregue. O valor de setup é reconhecido diluído nessa janela, a partir da data de início do contrato.">
+                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500" title="Em quantos meses a implementação é entregue. O valor de setup é reconhecido diluído nessa janela, a partir da data de início do contrato.">
                         Meses impl.
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">
                         Setup (One-Time)
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-center text-[13px] font-semibold text-gray-500">
                         Inadimplente
                     </th>
                     </tr>
@@ -749,7 +752,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                         const realIndex = localClients.findIndex(c => c.name === client.name);
                         return (
                         <tr key={realIndex} className={client.isActive ? '' : 'bg-gray-50 opacity-75'}>
-                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                             <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                                 <button
                                     onClick={() => fileInputRefs.current[realIndex]?.click()}
                                     className="text-red-600 hover:text-red-800 transition-colors p-1 rounded hover:bg-red-50"
@@ -770,7 +773,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     onChange={(e) => handleContractUpload(e, realIndex)}
                                 />
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                                 <input
                                     type="date"
                                     className={INPUT_STYLE}
@@ -778,7 +781,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     onChange={(e) => handleClientChange(realIndex, 'contractStartDate', e.target.value)}
                                 />
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                                 <select
                                     value={client.isActive ? 'true' : 'false'}
                                     onChange={(e) => handleClientChange(realIndex, 'isActive', e.target.value === 'true')}
@@ -788,7 +791,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     <option value="false">Churned</option>
                                 </select>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            <td className="px-6 py-3.5 whitespace-nowrap text-sm font-medium text-gray-900">
                                 {client.name}
                                 {/* Categorias efetivas: a do recorrente mais a da implementação,
                                     quando há setup. Um cliente raramente pertence a uma só. */}
@@ -797,9 +800,9 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                         <span
                                             key={cat}
                                             className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
-                                                cat === 'Saber' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                                                cat === 'Ter' ? 'bg-green-50 text-green-700 border-green-200' :
-                                                'bg-blue-50 text-blue-700 border-blue-200'
+                                                cat === 'Saber' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                                                cat === 'Ter' ? 'bg-teal-50 text-teal-800 border-teal-200' :
+                                                'bg-gray-100 text-gray-800 border-gray-300'
                                             }`}
                                         >
                                             {cat}
@@ -807,7 +810,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     ))}
                                 </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                                 <select
                                     className={INPUT_STYLE}
                                     value={client.category || 'Executar'}
@@ -817,7 +820,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                                 <select 
                                     className={INPUT_STYLE}
                                     value={client.accountManager || ''}
@@ -829,7 +832,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     ))}
                                 </select>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                                 <input
                                     type="number"
                                     className={INPUT_STYLE}
@@ -837,7 +840,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     onChange={(e) => handleClientChange(realIndex, 'monthlyFee', e.target.value)}
                                 />
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                                 <input
                                     type="number"
                                     min={0}
@@ -849,7 +852,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     title="Fee e setup guardam o valor CHEIO do contrato; a receita reconhecida é esse valor vezes este percentual."
                                 />
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                                 <select
                                     className={INPUT_STYLE}
                                     value={client.implementationType || DEFAULT_IMPLEMENTATION_TYPE}
@@ -864,7 +867,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     ))}
                                 </select>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                                 <input
                                     type="number"
                                     min={1}
@@ -875,7 +878,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     title="Use 1 para reconhecer o setup integralmente no mês de início do contrato."
                                 />
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                                 <input
                                     type="number"
                                     className={INPUT_STYLE}
@@ -884,7 +887,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     placeholder="0.00"
                                 />
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <td className="px-6 py-3.5 whitespace-nowrap text-center">
                                 {/* Receita excluída do lucro real quando marcado */}
                                 <button
                                     onClick={() => handleClientChange(realIndex, 'is_inadimplente', !client.is_inadimplente)}

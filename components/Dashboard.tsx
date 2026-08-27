@@ -12,30 +12,33 @@ interface DashboardProps {
   };
 }
 
-const KPICard = ({ title, value, sub, icon: Icon, color }: any) => (
-  <div className="bg-white overflow-hidden rounded-lg shadow-sm border border-gray-100 transition-all hover:shadow-md">
-    <div className="p-5">
-      <div className="flex items-center">
-        <div className={`flex-shrink-0 rounded-md p-3 ${color}`}>
-          <Icon className="h-6 w-6 text-white" aria-hidden="true" />
-        </div>
-        <div className="ml-5 w-0 flex-1">
-          <dl>
-            <dt className="truncate text-sm font-medium text-gray-500">{title}</dt>
-            <dd>
-              <div className="text-lg font-bold text-gray-900">{value}</div>
-            </dd>
-          </dl>
-        </div>
+/**
+ * Ladrilho de métrica.
+ *
+ * A versão anterior gastava metade da altura num quadrado de ícone colorido e
+ * numa tarja de rodapé cinza, deixando o número — que é o conteúdo — como o
+ * terceiro elemento mais evidente do card. Aqui o valor manda: rótulo discreto
+ * em cima, número grande, contexto logo abaixo. `tone` colore apenas o número,
+ * nunca o card inteiro, para que a cor signifique valor e não decoração.
+ */
+const KPICard = ({ title, value, sub, icon: Icon, tone = 'neutral' }: {
+  title: string; value: string; sub?: string;
+  icon: React.ElementType;
+  tone?: 'neutral' | 'pos' | 'neg';
+}) => {
+  const valueTone =
+    tone === 'pos' ? 'text-pos-600' : tone === 'neg' ? 'text-neg-600' : 'text-gray-900';
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-card p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <Icon className="h-4 w-4 text-gray-400" aria-hidden="true" />
+        <span className="text-sm font-medium text-gray-500">{title}</span>
       </div>
+      <div className={`metric text-2xl font-semibold leading-none ${valueTone}`}>{value}</div>
+      {sub && <div className="mt-2 text-sm text-gray-500 tnum">{sub}</div>}
     </div>
-    <div className="bg-gray-50 px-5 py-3 border-t border-gray-100">
-      <div className="text-sm">
-        <span className="font-medium text-gray-500">{sub}</span>
-      </div>
-    </div>
-  </div>
-);
+  );
+};
 
 type ClientSortKey = keyof ClientSummary;
 type EmployeeSortKey = keyof EmployeeSummary;
@@ -83,6 +86,12 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
   // Simplification: Show if totalHours > 0.
   const activeEmployeeSummaries = employeeSummaries.filter(e => e.totalHours > 0);
 
+  // Calculado uma vez: a versão anterior chamava .sort() dentro do JSX, que
+  // ordena o array NO LUGAR — reembaralhando a mesma lista já usada na tabela.
+  const piorCliente = activeClientSummaries.length
+      ? activeClientSummaries.reduce((pior, c) => (c.margin < pior.margin ? c : pior))
+      : null;
+
   const sortedClients = [...activeClientSummaries].sort((a, b) => {
     const valA = a[clientSortConfig.key];
     const valB = b[clientSortConfig.key];
@@ -117,13 +126,15 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
       { name: 'Saber', value: dashboard.revenueByCategory['Saber'] },
   ];
   // V4 Colors (Red/Black/Gray scale adapted for charts)
-  const CAT_COLORS = ['#b91c1c', '#404040', '#9ca3af']; // Red-700, Neutral-700, Gray-400
+  // Mesmas três cores das verticais em toda a ferramenta: Executar grafite,
+  // Saber âmbar, Ter teal. Vermelho fica reservado para prejuízo.
+  const CAT_COLORS = ['#1f2937', '#f59e0b', '#0d9488'];
 
   const capacityPieData = [
     { name: 'Utilizado', value: dashboard.totalHours },
     { name: 'Ocioso', value: Math.max(0, dashboard.totalCapacityHours - dashboard.totalHours) }
   ];
-  const PIE_COLORS = ['#b91c1c', '#f3f4f6']; // Red, Light Gray
+  const PIE_COLORS = ['#1f2937', '#e5e7eb'];
 
   const deptChartData = departmentSummaries.map(d => ({
       name: d.name,
@@ -183,11 +194,23 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
       {activeSubTab === 'overview' && (
         <div className="space-y-8 animate-fade-in">
            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
-            <KPICard title="Faturamento" value={fmt(dashboard.totalRevenue)} sub="Total Filtrado" icon={DollarSign} color="bg-green-600" />
-            <KPICard title="Custo Operacional" value={fmt(dashboard.totalCost)} sub={`${fmtNum(dashboard.totalHours)} horas`} icon={Clock} color="bg-red-600" />
-            <KPICard title="Lucro Bruto" value={fmt(dashboard.grossProfit)} sub={`${fmtPct(dashboard.overallMargin)} Margem`} icon={TrendingUp} color={dashboard.grossProfit >= 0 ? "bg-gray-800" : "bg-red-500"} />
-            <KPICard title="Menor Margem" value={activeClientSummaries.length > 0 ? activeClientSummaries.sort((a,b) => a.margin - b.margin)[0].name : "N/A"} sub={activeClientSummaries.length > 0 ? fmtPct(activeClientSummaries.sort((a,b) => a.margin - b.margin)[0].margin) : "0%"} icon={AlertTriangle} color="bg-orange-500" />
-            <KPICard title="Capacidade Geral" value={fmtPct(dashboard.globalCapacityRate)} sub="Ocupação" icon={Briefcase} color="bg-blue-600" />
+            <KPICard title="Faturamento" value={fmt(dashboard.totalRevenue)} sub="líquido de matriz e imposto" icon={DollarSign} />
+            <KPICard title="Custo Operacional" value={fmt(dashboard.totalCost)} sub={`${fmtNum(dashboard.totalHours)} horas apontadas`} icon={Clock} />
+            <KPICard
+              title="Lucro Bruto"
+              value={fmt(dashboard.grossProfit)}
+              sub={`${fmtPct(dashboard.overallMargin)} de margem`}
+              icon={TrendingUp}
+              tone={dashboard.grossProfit >= 0 ? 'pos' : 'neg'}
+            />
+            <KPICard
+              title="Menor Margem"
+              value={piorCliente ? piorCliente.name : '—'}
+              sub={piorCliente ? fmtPct(piorCliente.margin) : 'sem clientes no período'}
+              icon={AlertTriangle}
+              tone={piorCliente && piorCliente.margin < 0 ? 'neg' : 'neutral'}
+            />
+            <KPICard title="Capacidade Geral" value={fmtPct(dashboard.globalCapacityRate)} sub="das horas disponíveis" icon={Briefcase} />
           </div>
 
           {/* Carteira por Categoria (Saber × Ter × Executar) */}
@@ -206,31 +229,37 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
               const catProfit = catRevenue - catCost;
               const catMargin = catRevenue > 0 ? (catProfit / catRevenue) * 100 : 0;
               const inadimplentesCount = catClients.filter(c => c.is_inadimplente).length;
-              const colors: Record<string, { bg: string; bar: string; badge: string }> = {
-                Executar: { bg: 'bg-red-50 border-red-200', bar: 'bg-red-600', badge: 'bg-red-100 text-red-700' },
-                Saber:    { bg: 'bg-yellow-50 border-yellow-200', bar: 'bg-yellow-500', badge: 'bg-yellow-100 text-yellow-700' },
-                Ter:      { bg: 'bg-green-50 border-green-200', bar: 'bg-green-600', badge: 'bg-green-100 text-green-700' },
+              // Só um ponto de cor, e não o card inteiro tingido. Com fundo
+              // vermelho-50, "Executar" lia como alerta — num painel onde
+              // vermelho já significa prejuízo, a categoria parecia um problema.
+              const colors: Record<string, { dot: string; bar: string }> = {
+                Executar: { dot: 'bg-gray-800', bar: 'bg-gray-800' },
+                Saber:    { dot: 'bg-amber-500', bar: 'bg-amber-500' },
+                Ter:      { dot: 'bg-teal-600', bar: 'bg-teal-600' },
               };
               const c = colors[cat];
               const totalRevAll = Object.values(dashboard.revenueByCategory).reduce((a, b) => a + b, 0);
               const sharePct = totalRevAll > 0 ? (catRevenue / totalRevAll) * 100 : 0;
               return (
-                <div key={cat} className={`bg-white rounded-lg shadow-sm border p-6 ${c.bg}`}>
+                <div key={cat} className="bg-white rounded-xl border border-gray-200 shadow-card p-5">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-base font-bold text-gray-800">{cat}</h3>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded ${c.badge}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${c.dot}`} aria-hidden="true" />
+                      <h3 className="text-base font-semibold text-gray-900">{cat}</h3>
+                    </div>
+                    <span className="text-sm text-gray-500 tnum">
                       {catClients.length} cliente{catClients.length !== 1 ? 's' : ''}
                     </span>
                   </div>
                   <div className="space-y-2 text-sm text-gray-600">
-                    <div className="flex justify-between"><span>Receita</span><span className="font-semibold text-gray-900">{fmt(catRevenue)}</span></div>
-                    <div className="flex justify-between"><span>Custo</span><span className="font-semibold text-gray-900">{fmt(catCost)}</span></div>
-                    <div className="flex justify-between"><span>Lucro</span><span className={`font-bold ${catProfit >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(catProfit)}</span></div>
-                    <div className="flex justify-between"><span>Margem</span><span className="font-semibold text-gray-900">{fmtPct(catMargin)}</span></div>
+                    <div className="flex justify-between"><span>Faturamento</span><span className="font-medium text-gray-900 tnum">{fmt(catRevenue)}</span></div>
+                    <div className="flex justify-between"><span>Custo</span><span className="font-medium text-gray-900 tnum">{fmt(catCost)}</span></div>
+                    <div className="flex justify-between"><span>Lucro</span><span className={`font-semibold tnum ${catProfit >= 0 ? 'text-pos-600' : 'text-neg-600'}`}>{fmt(catProfit)}</span></div>
+                    <div className="flex justify-between"><span>Margem</span><span className={`font-medium tnum ${catMargin >= 0 ? 'text-gray-900' : 'text-neg-600'}`}>{fmtPct(catMargin)}</span></div>
                   </div>
                   {/* Barra de participação na receita total */}
                   <div className="mt-4">
-                    <div className="flex justify-between text-xs text-gray-400 mb-1">
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
                       <span>Participação na Receita</span>
                       <span>{sharePct.toFixed(1)}%</span>
                     </div>
@@ -254,7 +283,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
             {/* Gráfico Barras: Capacidade vs Realizado por Vertical */}
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
               <h3 className="text-base font-semibold text-gray-900 mb-1">Capacidade vs Realizado por Vertical</h3>
-              <p className="text-xs text-gray-400 mb-4">Capacidade = horas configuradas por vertical do player · Realizado = horas lançadas por categoria de cliente</p>
+              <p className="text-xs text-gray-500 mb-4">Capacidade = horas configuradas por vertical do player · Realizado = horas lançadas por categoria de cliente</p>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
@@ -297,7 +326,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                       <div className="w-full bg-gray-100 rounded-full h-1.5 mt-1">
                         <div className={`h-1.5 rounded-full ${colorBar}`} style={{ width: `${Math.min(taxa, 100)}%` }} />
                       </div>
-                      <p className="text-[10px] text-gray-400 mt-1">{fmtNum(real)}h / {fmtNum(cap)}h</p>
+                      <p className="text-[11px] text-gray-500 mt-1 tnum">{fmtNum(real)}h / {fmtNum(cap)}h</p>
                     </div>
                   );
                 })}
@@ -307,7 +336,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
             {/* Donut: distribuição das horas realizadas por vertical */}
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex flex-col">
               <h3 className="text-base font-semibold text-gray-900 mb-1">Distribuição de Horas por Vertical</h3>
-              <p className="text-xs text-gray-400 mb-2">Baseado nas horas lançadas por categoria de cliente atendido</p>
+              <p className="text-xs text-gray-500 mb-2">Baseado nas horas lançadas por categoria de cliente atendido</p>
               <div className="flex-1 relative min-h-[220px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -353,25 +382,25 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                   </BarChart>
               </ResponsiveContainer>
            </div>
-           <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+           <div className="bg-white rounded-xl border border-gray-200 shadow-card overflow-hidden">
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+                <thead className="sticky-head bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Departamento</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Colaboradores</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Capacidade (h)</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Realizado (h)</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ocupação</th>
+                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Departamento</th>
+                    <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500">Colaboradores</th>
+                    <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500">Capacidade (h)</th>
+                    <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500">Realizado (h)</th>
+                    <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500">Ocupação</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {departmentSummaries.map((dept, idx) => (
                     <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900">{dept.name}</td>
-                      <td className="px-6 py-4 text-sm text-gray-500 text-right">{dept.headcount}</td>
-                      <td className="px-6 py-4 text-sm text-gray-500 text-right">{fmtNum(dept.totalCapacityHours)}</td>
-                      <td className="px-6 py-4 text-sm text-gray-500 text-right">{fmtNum(dept.totalHoursRealized)}</td>
-                      <td className="px-6 py-4 text-sm text-gray-500 text-right">{fmtPct(dept.utilizationRate)}</td>
+                      <td className="px-6 py-3.5 text-sm font-medium text-gray-900">{dept.name}</td>
+                      <td className="px-6 py-3.5 text-sm text-gray-500 text-right">{dept.headcount}</td>
+                      <td className="px-6 py-3.5 text-sm text-gray-500 text-right">{fmtNum(dept.totalCapacityHours)}</td>
+                      <td className="px-6 py-3.5 text-sm text-gray-500 text-right">{fmtNum(dept.totalHoursRealized)}</td>
+                      <td className="px-6 py-3.5 text-sm text-gray-500 text-right">{fmtPct(dept.utilizationRate)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -437,34 +466,34 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                 </div>
            </div>
 
-           <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200">
+           <div className="bg-white rounded-xl border border-gray-200 shadow-card overflow-hidden">
+              <div className="px-6 py-3.5 border-b border-gray-200">
                   <h3 className="text-lg font-medium text-gray-900">Tabela de Lucratividade {categoryFilter !== 'All' ? `(${categoryFilter})` : ''}</h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                  <thead className="sticky-head bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleClientSort('name')}>
+                      <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleClientSort('name')}>
                           <div className="flex items-center">Cliente <ClientSortIcon columnKey="name" /></div>
                       </th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Categoria</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleClientSort('totalHours')}>
+                      <th className="px-6 py-3 text-center text-[13px] font-semibold text-gray-500">Categoria</th>
+                      <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleClientSort('totalHours')}>
                           <div className="flex items-center justify-end">Horas <ClientSortIcon columnKey="totalHours" /></div>
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleClientSort('operationalCost')}>
+                      <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleClientSort('operationalCost')}>
                           <div className="flex items-center justify-end">Custo <ClientSortIcon columnKey="operationalCost" /></div>
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleClientSort('grossRevenue')} title="Valor cheio de contrato reconhecido no período — o número que bate com o PDF.">
+                      <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleClientSort('grossRevenue')} title="Valor cheio de contrato reconhecido no período — o número que bate com o PDF.">
                           <div className="flex items-center justify-end">Contrato <ClientSortIcon columnKey="grossRevenue" /></div>
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleClientSort('netRevenue')} title="O que entra de fato: contrato menos 20% de matriz e 6% de imposto. Em cliente de repasse, menos o repasse e só o imposto.">
+                      <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleClientSort('netRevenue')} title="O que entra de fato: contrato menos 20% de matriz e 6% de imposto. Em cliente de repasse, menos o repasse e só o imposto.">
                           <div className="flex items-center justify-end">Faturamento <ClientSortIcon columnKey="netRevenue" /></div>
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleClientSort('grossProfit')}>
+                      <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleClientSort('grossProfit')}>
                           <div className="flex items-center justify-end">Lucro <ClientSortIcon columnKey="grossProfit" /></div>
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleClientSort('margin')}>
+                      <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleClientSort('margin')}>
                           <div className="flex items-center justify-end">Margem <ClientSortIcon columnKey="margin" /></div>
                       </th>
                     </tr>
@@ -472,12 +501,12 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {sortedClients.map((client, idx) => (
                       <tr key={idx} className={`hover:bg-gray-50 transition-colors ${!client.isActive ? 'bg-gray-50 opacity-70' : ''}`}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <td className="px-6 py-3.5 whitespace-nowrap text-sm font-medium text-gray-900">
                             {client.name}
                             {!client.isActive && <span className="ml-2 text-[10px] bg-gray-200 text-gray-600 px-1 rounded">Inativo</span>}
                             {client.is_inadimplente && <span className="ml-2 text-[10px] bg-red-100 text-red-700 border border-red-200 px-1 rounded">Inadimplente</span>}
                         </td>
-                        <td className="px-6 py-4 text-center">
+                        <td className="px-6 py-3.5 text-center">
                             <div className="flex flex-wrap gap-1 justify-center">
                                 {client.categories.map(cat => (
                                     <span
@@ -486,22 +515,22 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                                             ? 'Categoria do fee recorrente'
                                             : 'Categoria da implementação reconhecida no período'}
                                         className={`px-2 py-1 rounded text-xs border ${
-                                            cat === 'Saber' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                                            cat === 'Ter' ? 'bg-green-50 text-green-700 border-green-200' :
-                                            'bg-red-50 text-red-700 border-red-200'
+                                            cat === 'Saber' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                                            cat === 'Ter' ? 'bg-teal-50 text-teal-800 border-teal-200' :
+                                            'bg-gray-100 text-gray-700 border-gray-300'
                                         }`}
                                     >{cat}</span>
                                 ))}
                             </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-500 text-right">{fmtNum(client.totalHours)}h</td>
-                        <td className="px-6 py-4 text-sm text-gray-500 text-right">{fmt(client.operationalCost)}</td>
-                        <td className="px-6 py-4 text-sm text-gray-400 text-right">{fmt(client.grossRevenue)}</td>
-                        <td className="px-6 py-4 text-sm text-gray-700 font-medium text-right">{fmt(client.netRevenue)}</td>
+                        <td className="px-6 py-3.5 text-sm text-gray-500 text-right">{fmtNum(client.totalHours)}h</td>
+                        <td className="px-6 py-3.5 text-sm text-gray-500 text-right">{fmt(client.operationalCost)}</td>
+                        <td className="px-6 py-3.5 text-sm text-gray-500 text-right">{fmt(client.grossRevenue)}</td>
+                        <td className="px-6 py-3.5 text-sm text-gray-700 font-medium text-right">{fmt(client.netRevenue)}</td>
                         <td className={`px-6 py-4 text-sm font-medium text-right ${client.grossProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {fmt(client.grossProfit)}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-500 text-right">
+                        <td className="px-6 py-3.5 text-sm text-gray-500 text-right">
                           <span className={`px-2 rounded-full text-xs font-semibold ${client.margin >= 20 ? 'bg-green-100 text-green-800' : client.margin > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
                             {fmtPct(client.margin)}
                           </span>
@@ -535,25 +564,25 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                   </BarChart>
               </ResponsiveContainer>
            </div>
-           <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+           <div className="bg-white rounded-xl border border-gray-200 shadow-card overflow-hidden">
               <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                  <thead className="sticky-head bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleEmployeeSort('name')}>
+                      <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleEmployeeSort('name')}>
                           <div className="flex items-center">Nome <EmployeeSortIcon columnKey="name" /></div>
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Depto</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Verticais</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleEmployeeSort('capacityHours')}>
+                      <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Depto</th>
+                      <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Verticais</th>
+                      <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleEmployeeSort('capacityHours')}>
                           <div className="flex items-center justify-end">Capacidade <EmployeeSortIcon columnKey="capacityHours" /></div>
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleEmployeeSort('totalHours')}>
+                      <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleEmployeeSort('totalHours')}>
                           <div className="flex items-center justify-end">Realizado <EmployeeSortIcon columnKey="totalHours" /></div>
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleEmployeeSort('utilizationRate')}>
+                      <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleEmployeeSort('utilizationRate')}>
                           <div className="flex items-center justify-end">Ocupação <EmployeeSortIcon columnKey="utilizationRate" /></div>
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleEmployeeSort('costGenerated')}>
+                      <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleEmployeeSort('costGenerated')}>
                           <div className="flex items-center justify-end">Custo <EmployeeSortIcon columnKey="costGenerated" /></div>
                       </th>
                     </tr>
@@ -563,7 +592,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                       const empChurned = emp.endDate && new Date(emp.endDate + 'T00:00:00') <= new Date();
                       return (
                       <tr key={idx} className={`hover:bg-gray-50 ${empChurned ? 'opacity-75' : ''}`}>
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                        <td className="px-6 py-3.5 text-sm font-medium text-gray-900">
                           <div className="flex flex-col gap-0.5">
                             <span>{emp.name}</span>
                             {empChurned && emp.endDate && (
@@ -573,7 +602,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">{emp.department}</td>
+                        <td className="px-6 py-3.5 text-sm text-gray-500">{emp.department}</td>
                         <td className="px-6 py-4">
                           <div className="flex gap-1 flex-wrap">
                             {(emp.verticals || ['Executar']).map(v => (
@@ -585,9 +614,9 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                             ))}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-500 text-right">{fmtNum(emp.capacityHours)}h</td>
-                        <td className="px-6 py-4 text-sm text-gray-500 text-right">{fmtNum(emp.totalHours)}h</td>
-                        <td className="px-6 py-4 text-sm text-gray-500 text-right">
+                        <td className="px-6 py-3.5 text-sm text-gray-500 text-right">{fmtNum(emp.capacityHours)}h</td>
+                        <td className="px-6 py-3.5 text-sm text-gray-500 text-right">{fmtNum(emp.totalHours)}h</td>
+                        <td className="px-6 py-3.5 text-sm text-gray-500 text-right">
                            <span className={`px-2 py-1 rounded text-xs font-bold ${
                                emp.utilizationRate > 100 ? 'bg-red-100 text-red-800' :
                                emp.utilizationRate > 85 ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
@@ -595,7 +624,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                                {fmtPct(emp.utilizationRate)}
                            </span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-500 text-right">{fmt(emp.costGenerated)}</td>
+                        <td className="px-6 py-3.5 text-sm text-gray-500 text-right">{fmt(emp.costGenerated)}</td>
                       </tr>
                       );
                     })}
