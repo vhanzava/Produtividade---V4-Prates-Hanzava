@@ -103,6 +103,15 @@ export interface ClientConfig {
   // Use 1 para voltar ao reconhecimento integral no mês de início.
   implementationMonths?: number;
   contractStartDate?: string; // YYYY-MM-DD
+  /**
+   * Fim do contrato, "YYYY-MM-DD". O fee recorrente para de ser gerado a
+   * partir do mês seguinte a esta data.
+   *
+   * Sem esta data, um cliente marcado como inativo não gera recorrência em
+   * NENHUM mês — inclusive nos meses em que ainda era cliente. Preencher a
+   * data é o que preserva o histórico corretamente.
+   */
+  contractEndDate?: string;
   accountManager?: string;
   is_inadimplente?: boolean; // Exclui receita do lucro real quando true
   /** Faturamentos pontuais: comissões, bônus, extras combinados. */
@@ -171,6 +180,15 @@ export interface DashboardSummary {
   hoursByVertical: Record<ClientCategory, number>;
   // Capacidade total distribuída pelas verticais configuradas no player
   capacityByVertical: Record<ClientCategory, number>;
+  /**
+   * Cobertura de apontamentos no período. A receita é gerada a partir do
+   * CADASTRO para todo mês do filtro, enquanto o custo vem de apontamentos
+   * reais. Quando o filtro alcança meses sem hora lançada, compara-se receita
+   * de N meses contra custo de poucos — e a margem sobe para 90%+ sem que
+   * nada tenha melhorado. Precisa ficar visível.
+   */
+  monthsInPeriod: number;
+  monthsWithEntries: number;
 }
 
 export interface UserSession {

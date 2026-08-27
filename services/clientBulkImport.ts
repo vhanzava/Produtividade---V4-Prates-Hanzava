@@ -22,6 +22,8 @@ export interface ClientImportRow {
   repassePercent?: number;
   /** "YYYY-MM-DD" — abre a janela de amortização da implementação. */
   contractStartDate?: string;
+  /** "YYYY-MM-DD" — fim do contrato. O recorrente para no mês seguinte. */
+  contractEndDate?: string;
   accountManager?: string;
   is_inadimplente?: boolean;
 }
@@ -135,11 +137,13 @@ export const parseClientImportPayload = (
       (row as unknown as Record<string, unknown>)[campo as string] = valor;
     }
 
-    if (item.contractStartDate !== undefined) {
-      if (typeof item.contractStartDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(item.contractStartDate)) {
-        return { rows: null, error: `${posicao} (${row.name}): "contractStartDate" deve estar no formato AAAA-MM-DD.` };
+    for (const campoData of ['contractStartDate', 'contractEndDate'] as const) {
+      const v = item[campoData];
+      if (v === undefined) continue;
+      if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+        return { rows: null, error: `${posicao} (${row.name}): "${campoData}" deve estar no formato AAAA-MM-DD.` };
       }
-      row.contractStartDate = item.contractStartDate;
+      row[campoData] = v;
     }
     if (item.accountManager !== undefined) {
       if (typeof item.accountManager !== 'string') {
@@ -209,6 +213,7 @@ export const applyClientImport = (
         implementationMonths: row.implementationMonths,
         repassePercent: row.repassePercent,
         contractStartDate: row.contractStartDate,
+        contractEndDate: row.contractEndDate,
         accountManager: row.accountManager,
         is_inadimplente: row.is_inadimplente,
         history: {},

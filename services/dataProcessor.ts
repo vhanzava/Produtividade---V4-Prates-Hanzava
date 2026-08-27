@@ -493,7 +493,29 @@ export const calculateSummary = (
             grossTotal += grossOneTime;
         }
 
+        // Vigência do contrato governa a recorrência.
+        //
+        // Antes o fee era gerado para TODO mês do filtro, sem olhar se o
+        // cliente ainda existia. Num filtro de 11 meses, clientes churnados
+        // ressuscitavam e respondiam por mais da metade do faturamento
+        // reportado — receita que nunca entrou.
+        const mesIndice = (iso: string) => {
+            const [y, mo] = iso.split('-').map(Number);
+            return y * 12 + (mo - 1);
+        };
+        const inicioIdx = config.contractStartDate ? mesIndice(config.contractStartDate) : null;
+        const fimIdx = config.contractEndDate ? mesIndice(config.contractEndDate) : null;
+
         activeMonths.forEach(m => {
+            const idx = mesIndice(m);
+            if (inicioIdx !== null && idx < inicioIdx) return;
+            if (fimIdx !== null) {
+                if (idx > fimIdx) return;
+            } else if (!config.isActive) {
+                // Churnado sem data de saída: não dá para saber quando parou
+                // de pagar. Subestimar é melhor que inventar receita.
+                return;
+            }
             const monthlyFee = config.history[m] !== undefined ? config.history[m] : config.defaultFee;
             grossTotal += monthlyFee * getProRataRatio(m);
         });
@@ -710,7 +732,11 @@ export const calculateSummary = (
       globalCapacityRate,
       revenueByCategory,
       hoursByVertical,
-      capacityByVertical
+      capacityByVertical,
+      monthsInPeriod: activeMonths.length,
+      // Conta só os meses do filtro que têm hora lançada: é o que revela a
+      // comparação entre receita de muitos meses e custo de poucos.
+      monthsWithEntries: new Set(entries.map(e => e.monthKey)).size,
     }
   };
 };

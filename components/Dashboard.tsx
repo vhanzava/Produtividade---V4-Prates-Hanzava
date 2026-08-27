@@ -203,6 +203,24 @@ const Dashboard: React.FC<DashboardProps> = ({ summary, canViewCost = false }) =
 
       {activeSubTab === 'overview' && (
         <div className="space-y-8 animate-fade-in">
+          {dashboard.monthsWithEntries < dashboard.monthsInPeriod && (
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-900">
+                <p className="font-semibold">Margem inflada: o período tem mais meses que apontamentos.</p>
+                <p className="mt-1 text-amber-800 leading-relaxed">
+                  O filtro cobre <strong className="tnum">{dashboard.monthsInPeriod}</strong>{" "}
+                  {dashboard.monthsInPeriod === 1 ? "mês" : "meses"}, mas só{" "}
+                  <strong className="tnum">{dashboard.monthsWithEntries}</strong>{" "}
+                  {dashboard.monthsWithEntries === 1 ? "tem" : "têm"} horas lançadas. O faturamento é
+                  gerado do cadastro para todo mês do período, mas o custo só existe onde há
+                  apontamento — então a margem aparece bem maior do que é. Sincronize os meses que
+                  faltam ou reduza o período.
+                </p>
+              </div>
+            </div>
+          )}
+
            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
             <KPICard title="Faturamento" value={fmt(dashboard.totalRevenue)} sub="líquido de matriz e imposto" icon={DollarSign} />
             <KPICard title="Custo Operacional" value={fmt(dashboard.totalCost)} sub={`${fmtNum(dashboard.totalHours)} horas apontadas`} icon={Clock} />
