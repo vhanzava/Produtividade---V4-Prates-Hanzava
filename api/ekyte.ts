@@ -32,14 +32,17 @@ const EKYTE_RESOURCES = {
   'time-trackings': {
     path: '/v1.0/time-trackings',
     allowedParams: ['createdFrom', 'createdTo', 'workspaceId', 'squadId'],
+    pageSize: 100,
   },
   workspaces: {
     path: '/v1.0/workspaces',
     allowedParams: ['situationId', 'name', 'squadId'],
+    pageSize: 100,
   },
   users: {
     path: '/v1.0/users',
     allowedParams: [],
+    pageSize: 500,
   },
 } as const;
 
@@ -68,7 +71,14 @@ class EkyteError extends Error {
 }
 
 /** Teto de páginas por requisição — evita varrer a base inteira se um filtro vier errado. */
-const MAX_PAGES = 60;
+const MAX_PAGES = 300;
+
+/**
+ * Orçamento de tempo da paginação. Fica bem abaixo do timeout da função para
+ * que a resposta saia como JSON parcial e sinalizado, em vez de a função ser
+ * morta no meio e devolver página de erro — perdendo tudo que já foi baixado.
+ */
+const TIME_BUDGET_MS = 20000;
 
 const getApiKey = (): string => {
   const key = typeof process !== 'undefined' ? process.env?.EKYTE_API_KEY : undefined;
@@ -83,19 +93,28 @@ const getApiKey = (): string => {
 
 /**
  * Busca todas as páginas de um recurso e devolve os registros concatenados.
- * A API do eKyte responde `{ error, data, paging }` e pagina via `?page=N`,
- * sinalizando o fim quando `paging.currentPage.number >= paging.totalPages`.
+ *
+ * O fim é detectado pelo TAMANHO da página, não pelo objeto `paging`: página
+ * incompleta ou vazia significa que acabou. Depender de `paging.totalPages`
+ * fazia a busca parar na primeira página sempre que o campo não vinha no
+ * formato esperado, trazendo 100 registros e nada mais.
+ *
+ * Devolve `truncated` quando bateu no teto de páginas ou no orçamento de tempo,
+ * para que a interface possa avisar que o período veio incompleto.
  */
 const ekyteFetchAll = async (
   resource: EkyteResource,
   params: Record<string, string>,
   apiKey: string,
-): Promise<{ data: unknown[]; pages: number }> => {
-  const { path } = EKYTE_RESOURCES[resource];
+): Promise<{ data: unknown[]; pages: number; truncated: boolean; reportedTotal?: number }> => {
+  const { path, pageSize } = EKYTE_RESOURCES[resource];
   const all: unknown[] = [];
+  const startedAt = Date.now();
   let page = 1;
+  let truncated = false;
+  let reportedTotal: number | undefined;
 
-  while (page <= MAX_PAGES) {
+  while (true) {
     const url = new URL(path, EKYTE_BASE_URL);
     url.searchParams.set('apiKey', apiKey);
     url.searchParams.set('page', String(page));
@@ -130,20 +149,31 @@ const ekyteFetchAll = async (
       throw new EkyteError(`eKyte respondeu HTTP ${response.status}.`, response.status);
     }
 
-    if (Array.isArray(body.data)) all.push(...body.data);
+    const rows = Array.isArray(body.data) ? body.data : [];
+    all.push(...rows);
+    reportedTotal = body.paging?.totalCollectionSize ?? reportedTotal;
 
-    const totalPages = body.paging?.totalPages ?? 1;
-    const currentPage = body.paging?.currentPage?.number ?? page;
-    if (currentPage >= totalPages) {
-      return { data: all, pages: page };
-    }
-    page = currentPage + 1;
+    // Fim natural, e o único sinal que não depende do formato de `paging`:
+    // página vazia ou incompleta significa que acabou. A versão anterior lia
+    // `paging.totalPages ?? 1` e, quando esse campo não vinha como esperado,
+    // encerrava na primeira página — trazendo sempre 100 registros e nada mais.
+    if (rows.length === 0 || rows.length < pageSize) break;
+
+    // Quando a API informa o total, respeita — mas só como confirmação.
+    const totalPages = body.paging?.totalPages;
+    if (typeof totalPages === 'number' && totalPages > 0 && page >= totalPages) break;
+
+    // Nunca avança pelo número devolvido pela API: se ele vier 0-indexado ou
+    // repetido, o loop pediria a mesma página para sempre.
+    page += 1;
+
+    if (page > MAX_PAGES) { truncated = true; break; }
+    // Função serverless tem timeout. Estourar devolve página de erro e perde
+    // tudo que já foi baixado; melhor entregar o parcial dizendo que é parcial.
+    if (Date.now() - startedAt > TIME_BUDGET_MS) { truncated = true; break; }
   }
 
-  throw new EkyteError(
-    `Consulta excedeu o limite de ${MAX_PAGES} páginas. Reduza o período sincronizado.`,
-    413,
-  );
+  return { data: all, pages: page, truncated, reportedTotal };
 };
 
 type Query = Record<string, string | string[] | undefined>;
@@ -245,8 +275,8 @@ export const handleEkyteRequest = async (
   try {
     const apiKey = getApiKey();
     const params = pickAllowedParams(rawResource, query);
-    const { data, pages } = await ekyteFetchAll(rawResource, params, apiKey);
-    return { status: 200, body: { data, count: data.length, pages } };
+    const { data, pages, truncated, reportedTotal } = await ekyteFetchAll(rawResource, params, apiKey);
+    return { status: 200, body: { data, count: data.length, pages, truncated, reportedTotal } };
   } catch (err) {
     if (err instanceof EkyteError) {
       // Status vindo do eKyte pode ser 402/403; normaliza para faixa HTTP válida.

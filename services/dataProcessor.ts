@@ -427,16 +427,22 @@ export const calculateSummary = (
         
         // One Time Fee (Implementação/Setup) — reconhecimento por competência.
         //
-        // O setup é entregue ao longo de vários meses, então lançar 100% da
-        // receita no mês de início descasava receita e custo: a margem do mês 1
-        // estourava e a dos meses seguintes afundava, sem que nada tivesse
-        // mudado na operação. Aqui o valor é diluído em `implementationMonths`
-        // (padrão 3) a partir do mês do início do contrato.
+        // Em TER o setup é entregue ao longo de vários meses, então lançar 100%
+        // da receita no mês de início descasava receita e custo: a margem do mês
+        // 1 estourava e a dos seguintes afundava sem nada ter mudado na operação.
+        // Por isso o valor é diluído em `implementationMonths`.
+        //
+        // Em SABER é o oposto: projeto de escopo fechado, cobrado e pago de uma
+        // vez. Diluir inventaria receita em meses onde nada foi faturado. O valor
+        // entra inteiro no mês do contrato e zera nos seguintes — a margem então
+        // se dilui sozinha, conforme o custo de horas continua correndo.
         //
         // Sem data de início do contrato não há como saber a janela, então nada
         // é reconhecido — o usuário precisa preencher a data em Configurações.
         if (config.oneTimeFee && config.oneTimeFee > 0 && config.contractStartDate) {
-            const months = Math.max(1, Math.round(config.implementationMonths ?? DEFAULT_IMPLEMENTATION_MONTHS));
+            const months = implementationCategory === 'Saber'
+                ? 1
+                : Math.max(1, Math.round(config.implementationMonths ?? DEFAULT_IMPLEMENTATION_MONTHS));
             const contractStart = new Date(config.contractStartDate + 'T00:00:00');
             const startMonthIndex = contractStart.getFullYear() * 12 + contractStart.getMonth();
             const perMonth = config.oneTimeFee / months;
@@ -518,7 +524,25 @@ export const calculateSummary = (
   // Capacidade total distribuída pelas verticais configuradas em cada player
   const capacityByVertical: Record<ClientCategory, number> = { Saber: 0, Ter: 0, Executar: 0 };
 
-  const allEmpNames = new Set([...empMap.keys(), ...empStats.keys()]);
+  /**
+   * Colaborador que já saiu antes do período, ou que ainda nem entrou, não
+   * deve constar: aparecia com capacidade e ocupação zeradas, empurrando a
+   * média do departamento para baixo e sugerindo ociosidade que não existe.
+   * Quem saiu no meio do período continua aparecendo — as horas dele são reais.
+   */
+  const isEmployeeInPeriod = (config?: EmployeeConfig): boolean => {
+      if (!config) return true; // veio dos apontamentos, logo trabalhou
+      if (config.endDate && new Date(config.endDate + 'T23:59:59') < start) return false;
+      if (config.startDate && new Date(config.startDate + 'T00:00:00') > end) return false;
+      return true;
+  };
+
+  const allEmpNames = new Set(
+      [...empMap.keys(), ...empStats.keys()].filter(name =>
+          // Com horas apontadas, entra de qualquer jeito: o custo é real.
+          (empStats.get(name)?.hours ?? 0) > 0 || isEmployeeInPeriod(empMap.get(name))
+      )
+  );
 
   allEmpNames.forEach(name => {
       const stat = empStats.get(name) || { hours: 0, cost: 0 };

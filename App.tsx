@@ -554,6 +554,9 @@ const App: React.FC = () => {
             const alertas: string[] = [];
             if (result.stats.semExecutor > 0) alertas.push(`${result.stats.semExecutor} sem executor`);
             if (result.stats.semWorkspace > 0) alertas.push(`${result.stats.semWorkspace} sem workspace`);
+            // Período incompleto é pior que erro: os números parecem plausíveis
+            // e ninguém desconfia. Precisa gritar.
+            if (result.stats.truncated) alertas.push('PERÍODO INCOMPLETO — reduza o intervalo e sincronize por partes');
 
             return `eKyte: ${result.stats.imported} apontamento(s) importado(s)` +
                 (extras.length > 0 ? ` — ${extras.join(', ')}` : '') +

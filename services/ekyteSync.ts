@@ -85,6 +85,8 @@ export interface EkyteSyncStats {
   semExecutor: number;
   /** Importados sem nome de workspace — não casam com nenhum cliente. */
   semWorkspace: number;
+  /** A API não devolveu o período inteiro: bateu no teto de páginas ou de tempo. */
+  truncated: boolean;
 }
 
 export interface EkyteSyncResult {
@@ -126,7 +128,7 @@ const parseEkyteDate = (value: string | undefined): Date | null => {
 const fetchResource = async <T>(
   resource: string,
   params: Record<string, string>,
-): Promise<T[]> => {
+): Promise<{ rows: T[]; truncated: boolean }> => {
   // O proxy exige sessão válida: sem isso o endpoint ficaria aberto e qualquer
   // um com a URL puxaria todos os dados do eKyte da empresa.
   const { data: auth } = await supabase.auth.getSession();
@@ -145,7 +147,7 @@ const fetchResource = async <T>(
   // apenas "resposta inválida" e não dá para saber o que de fato falhou.
   const raw = await response.text();
 
-  let body: { data?: T[]; error?: string };
+  let body: { data?: T[]; error?: string; truncated?: boolean };
   try {
     body = JSON.parse(raw);
   } catch {
@@ -164,11 +166,11 @@ const fetchResource = async <T>(
   if (!response.ok) {
     throw new Error(body.error || `Falha ao consultar o eKyte (HTTP ${response.status}).`);
   }
-  return body.data ?? [];
+  return { rows: body.data ?? [], truncated: !!body.truncated };
 };
 
 export const fetchEkyteWorkspaces = async (): Promise<EkyteWorkspaceInfo[]> => {
-  const raw = await fetchResource<EkyteWorkspace>('workspaces', {});
+  const { rows: raw } = await fetchResource<EkyteWorkspace>('workspaces', {});
   return raw
     .filter((workspace) => !!workspace.name?.trim())
     .map((workspace) => ({
@@ -200,14 +202,16 @@ export const syncFromEkyte = async (
   // Usuários e workspaces servem de índice por id: quando o apontamento não
   // traz o nome embutido, ele é resolvido aqui. Sem isso todo mundo virava
   // "Sem executor" e as horas colapsavam numa linha só.
-  const [trackings, workspaces, users] = await Promise.all([
+  const [trackingsResult, workspaces, usersResult] = await Promise.all([
     fetchResource<EkyteTimeTracking>('time-trackings', {
       createdFrom: shiftDays(startDate, -BUFFER_DAYS),
       createdTo: shiftDays(endDate, BUFFER_DAYS),
     }),
     fetchEkyteWorkspaces().catch(() => [] as EkyteWorkspaceInfo[]),
-    fetchResource<EkyteUser>('users', {}).catch(() => [] as EkyteUser[]),
+    fetchResource<EkyteUser>('users', {}).catch(() => ({ rows: [] as EkyteUser[], truncated: false })),
   ]);
+  const trackings = trackingsResult.rows;
+  const users = usersResult.rows;
 
   const workspaceById = new Map<number, string>();
   workspaces.forEach(w => { if (w.id !== undefined) workspaceById.set(w.id, w.name); });
@@ -230,6 +234,7 @@ export const syncFromEkyte = async (
     skippedOutOfRange: 0,
     semExecutor: 0,
     semWorkspace: 0,
+    truncated: trackingsResult.truncated,
   };
 
   trackings.forEach((tracking) => {
