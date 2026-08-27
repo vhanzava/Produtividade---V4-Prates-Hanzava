@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { parseCSV, calculateSummary } from './services/dataProcessor';
+import { parseCSV, calculateSummary, buildClientNameIndex, resolveClientName } from './services/dataProcessor';
 import { TimeEntry, EmployeeConfig, ClientConfig, UserSession, SystemBackup, HealthInput } from './types';
 import FileUpload from './components/FileUpload';
 import EkyteSync from './components/EkyteSync';
@@ -93,7 +93,7 @@ const App: React.FC = () => {
       const cru = localStorage.getItem(PERIODO_KEY);
       if (!cru) return null;
       const p = JSON.parse(cru);
-      return /^d{4}-d{2}-d{2}$/.test(p?.start) && /^d{4}-d{2}-d{2}$/.test(p?.end) ? p : null;
+      return /^\d{4}-\d{2}-\d{2}$/.test(p?.start) && /^\d{4}-\d{2}-\d{2}$/.test(p?.end) ? p : null;
     } catch { return null; }
   };
   const [startDate, setStartDate] = useState<string>(() => periodoSalvo()?.start || '');
@@ -504,20 +504,31 @@ const App: React.FC = () => {
     });
     const updatedEmps = [...employees, ...newEmps];
 
-    const existingClientMap = new Map(clients.map(c => [c.name, c]));
+    // O cadastro automático precisa enxergar APELIDOS, não só nomes.
+    //
+    // Comparando apenas por nome, uma workspace já apelidada era tratada como
+    // desconhecida e recriada como cliente novo a cada sincronização — o que
+    // desfazia o merge silenciosamente. Pior: com o registro recriado, o nome
+    // próprio passa a vencer o apelido no índice e as horas voltavam para ele,
+    // separadas do fee. É o caso EIVA (workspace) x FT Containers (cadastro).
+    const indiceNomes = buildClientNameIndex(clients);
     const newClientsList: ClientConfig[] = [];
     uniqueWorkspaces.forEach(name => {
-         if (!existingClientMap.has(name)) {
-            newClientsList.push({
-                name,
-                // Só vale para clientes novos: o isActive de quem já está
-                // cadastrado é decisão comercial e não é sobrescrito pelo eKyte.
-                isActive: workspaceStatus?.get(name) ?? true,
-                category: 'Executar',
-                defaultFee: 0,
-                history: {}
-            });
-         }
+         const canonico = resolveClientName(name, indiceNomes);
+         // resolveClientName devolve o próprio nome quando não conhece a
+         // workspace; conhecer significa ter voltado outro nome, ou o mesmo
+         // por já estar cadastrado.
+         if (indiceNomes.has(name.trim().toLowerCase())) return;
+         if (newClientsList.some(c => c.name === canonico)) return;
+         newClientsList.push({
+             name,
+             // Só vale para clientes novos: o isActive de quem já está
+             // cadastrado é decisão comercial e não é sobrescrito pelo eKyte.
+             isActive: workspaceStatus?.get(name) ?? true,
+             category: 'Executar',
+             defaultFee: 0,
+             history: {}
+         });
     });
     const updatedClients = [...clients, ...newClientsList];
 
