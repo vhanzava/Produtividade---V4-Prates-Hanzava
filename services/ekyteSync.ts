@@ -1,6 +1,7 @@
 import { TimeEntry } from '../types';
 import { getMonthKey } from './dataProcessor';
 import { supabase } from '../lib/supabase';
+import { formatPersonName } from './format';
 
 // Cliente de sincronização com o eKyte.
 //
@@ -264,7 +265,9 @@ export const syncFromEkyte = async (
 
     entries.push({
       id: `ekyte-${tracking.id}`,
-      executor: executor || 'Sem executor',
+      // Normalizado na entrada: o eKyte manda o e-mail quando o cadastro do
+      // usuário não tem nome, e o e-mail cru estoura o eixo dos gráficos.
+      executor: executor ? formatPersonName(executor) : 'Sem executor',
       workspace: workspace || 'Sem workspace',
       realizedTime: minutesToHHMM(minutes),
       realizedDecimal: minutes / 60,

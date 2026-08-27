@@ -50,6 +50,29 @@ export interface EmployeeConfig {
   history: Record<string, MonthlyConfigEmp>; // key: "YYYY-MM"
 }
 
+/**
+ * Faturamento pontual fora do contrato — comissão, bônus, um extra combinado.
+ *
+ * Diferente do fee recorrente e da implementação, não se repete nem se dilui:
+ * entra no mês da data e some quando o filtro não alcança aquela data.
+ */
+export interface ExtraRevenue {
+  id: string;
+  /** "YYYY-MM-DD" — o dia em que este valor foi faturado. */
+  date: string;
+  /** Valor de contrato, antes de repasse, matriz e imposto. */
+  amount: number;
+  label: string;
+  /**
+   * Quando true, o valor já é líquido e não sofre nenhuma dedução. Uma
+   * comissão recebida da matriz costuma chegar assim; um extra cobrado do
+   * cliente, não.
+   */
+  liquido?: boolean;
+  /** Categoria em que este valor entra. Sem isso, usa a do cliente. */
+  category?: ClientCategory;
+}
+
 export interface ClientConfig {
   name: string;
   // Outros nomes pelos quais este cliente aparece — normalmente o nome da
@@ -82,6 +105,8 @@ export interface ClientConfig {
   contractStartDate?: string; // YYYY-MM-DD
   accountManager?: string;
   is_inadimplente?: boolean; // Exclui receita do lucro real quando true
+  /** Faturamentos pontuais: comissões, bônus, extras combinados. */
+  extraRevenues?: ExtraRevenue[];
   history: Record<string, number>; // key: "YYYY-MM", value: fee
 }
 
@@ -98,7 +123,10 @@ export interface ClientSummary {
   netRevenue: number;
   // Parcela de implementação dentro do netRevenue, já líquida.
   implementationRevenue: number;
-  grossProfit: number;
+  // Faturamento menos custo operacional. A operação chama isto de MARGEM
+  // OPERACIONAL, não de lucro: lucro só existe depois de despesas fixas,
+  // que esta ferramenta não conhece.
+  operatingMargin: number;
   margin: number;
   isActive: boolean;
   category: ClientCategory; // Categoria do fee recorrente
@@ -133,7 +161,7 @@ export interface DepartmentSummary {
 export interface DashboardSummary {
   totalRevenue: number;
   totalCost: number;
-  grossProfit: number;
+  operatingMargin: number;
   overallMargin: number;
   totalHours: number;
   totalCapacityHours: number;

@@ -85,8 +85,26 @@ const App: React.FC = () => {
   const [currentModule, setCurrentModule] = useState<'none' | 'productivity' | 'health'>('none');
   
   // Date Filtering
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  // A escolha de período é do usuário e precisa sobreviver ao reload: sem isso
+  // ele reajusta o filtro em toda abertura da ferramenta.
+  const PERIODO_KEY = 'ferramenta.periodo';
+  const periodoSalvo = (): { start: string; end: string } | null => {
+    try {
+      const cru = localStorage.getItem(PERIODO_KEY);
+      if (!cru) return null;
+      const p = JSON.parse(cru);
+      return /^d{4}-d{2}-d{2}$/.test(p?.start) && /^d{4}-d{2}-d{2}$/.test(p?.end) ? p : null;
+    } catch { return null; }
+  };
+  const [startDate, setStartDate] = useState<string>(() => periodoSalvo()?.start || '');
+  const [endDate, setEndDate] = useState<string>(() => periodoSalvo()?.end || '');
+
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    // localStorage falha em janela privada e com armazenamento bloqueado;
+    // perder a preferência é aceitável, quebrar a tela não.
+    try { localStorage.setItem(PERIODO_KEY, JSON.stringify({ start: startDate, end: endDate })); } catch {}
+  }, [startDate, endDate]);
   
   // Sync State
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
@@ -97,8 +115,12 @@ const App: React.FC = () => {
   // @ts-ignore
   const isOfflineMode = !supabase.supabaseUrl || supabase.supabaseUrl.includes('placeholder');
 
-  // Sem dados carregados não há período de onde inferir o filtro. Assume o mês
-  // corrente para que a sincronização com o eKyte já nasça utilizável.
+  // Período padrão e persistência do filtro.
+  //
+  // Antes o filtro era derivado do min/max dos apontamentos carregados, então
+  // abrir a ferramenta jogava a visão para o primeiro apontamento já existente —
+  // meses atrás — e obrigava a reajustar toda vez. Agora vale a última escolha
+  // do próprio usuário; sem histórico, o mês vigente.
   const applyDefaultPeriod = () => {
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
@@ -381,13 +403,9 @@ const App: React.FC = () => {
               setEmployees(data.employees || []);
               setClients(data.clients || []);
 
-              if (loadedEntries.length > 0 && !startDate) {
-                  const dates = loadedEntries.map((e: TimeEntry) => e.date.getTime());
-                  setStartDate(new Date(Math.min(...dates)).toISOString().split('T')[0]);
-                  setEndDate(new Date(Math.max(...dates)).toISOString().split('T')[0]);
-              } else if (loadedEntries.length === 0) {
-                  applyDefaultPeriod();
-              }
+              // O período NÃO é mais inferido dos apontamentos carregados: isso
+              // jogava a visão para o primeiro apontamento da base, meses atrás.
+              applyDefaultPeriod();
               
               if (data.updated_at) {
                   const date = new Date(data.updated_at);
@@ -606,8 +624,10 @@ const App: React.FC = () => {
   }, [entries, startDate, endDate]);
 
   const summary = useMemo(() => {
-    return calculateSummary(filteredEntries, employees, clients, startDate, endDate);
-  }, [filteredEntries, employees, clients, startDate, endDate]);
+    //  completo vai junto: o mês de faturamento dos clientes de Saber
+    // não pode depender do recorte que está na tela.
+    return calculateSummary(filteredEntries, employees, clients, startDate, endDate, entries);
+  }, [filteredEntries, entries, employees, clients, startDate, endDate]);
 
   if (isRestoringSession) {
       return (
@@ -837,7 +857,7 @@ const App: React.FC = () => {
               </div>
             ) : (
               activeTab === 'dashboard' ? (
-                <Dashboard summary={summary} /> 
+                <Dashboard summary={summary} canViewCost={session.isMaster} /> 
               ) : (
                 <Settings 
                   employees={employees} 

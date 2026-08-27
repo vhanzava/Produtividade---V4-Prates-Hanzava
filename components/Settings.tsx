@@ -117,6 +117,43 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
     setBulkOpen(false);
   };
 
+  // Faturamentos pontuais: comissões, bônus, extras combinados.
+  const [extrasAbertos, setExtrasAbertos] = useState<Record<number, boolean>>({});
+
+  const addExtra = (index: number) => {
+    const novos = [...localClients];
+    const cliente = novos[index];
+    cliente.extraRevenues = [
+      ...(cliente.extraRevenues || []),
+      {
+        // Date.now sozinho colide quando se adiciona duas linhas no mesmo ms.
+        id: `x${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        date: new Date().toISOString().slice(0, 10),
+        amount: 0,
+        label: '',
+      },
+    ];
+    setLocalClients(novos);
+    setIsSaved(false);
+  };
+
+  const updateExtra = (index: number, id: string, campo: string, valor: any) => {
+    const novos = [...localClients];
+    const cliente = novos[index];
+    cliente.extraRevenues = (cliente.extraRevenues || []).map(e =>
+      e.id !== id ? e : { ...e, [campo]: campo === 'amount' ? (parseFloat(valor) || 0) : valor }
+    );
+    setLocalClients(novos);
+    setIsSaved(false);
+  };
+
+  const removeExtra = (index: number, id: string) => {
+    const novos = [...localClients];
+    novos[index].extraRevenues = (novos[index].extraRevenues || []).filter(e => e.id !== id);
+    setLocalClients(novos);
+    setIsSaved(false);
+  };
+
   const [newClientName, setNewClientName] = useState('');
   const [newClientFee, setNewClientFee] = useState('');
   const [newClientCategory, setNewClientCategory] = useState<ClientCategory>('Executar');
@@ -745,13 +782,17 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                     <th className="px-6 py-3 text-center text-[13px] font-semibold text-gray-500">
                         Inadimplente
                     </th>
+                    <th className="px-6 py-3 text-center text-[13px] font-semibold text-gray-500" title="Comissões, bônus e outros faturamentos pontuais deste cliente">
+                        Extras
+                    </th>
                     </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                     {sortedClients.map((client, idx) => {
                         const realIndex = localClients.findIndex(c => c.name === client.name);
                         return (
-                        <tr key={realIndex} className={client.isActive ? '' : 'bg-gray-50 opacity-75'}>
+                        <React.Fragment key={realIndex}>
+                        <tr className={client.isActive ? '' : 'bg-gray-50 opacity-75'}>
                              <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                                 <button
                                     onClick={() => fileInputRefs.current[realIndex]?.click()}
@@ -901,7 +942,87 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     {client.is_inadimplente ? 'Inadimplente' : 'Adimplente'}
                                 </button>
                             </td>
+                            <td className="px-6 py-3.5 whitespace-nowrap text-center">
+                                <button
+                                    onClick={() => setExtrasAbertos(a => ({ ...a, [realIndex]: !a[realIndex] }))
+                                    }
+                                    className={`text-xs px-2 py-1 rounded border transition-colors ${
+                                        (client.extraRevenues?.length || 0) > 0
+                                            ? 'bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100'
+                                            : 'text-gray-500 border-gray-300 hover:bg-gray-50'
+                                    }`}
+                                    title="Comissões, bônus e outros faturamentos pontuais"
+                                >
+                                    + Extras{(client.extraRevenues?.length || 0) > 0 ? ` (${client.extraRevenues!.length})` : ''}
+                                </button>
+                            </td>
                         </tr>
+                        {extrasAbertos[realIndex] && (
+                          <tr className="bg-gray-50">
+                            <td colSpan={13} className="px-6 py-4">
+                              <div className="max-w-3xl">
+                                <p className="text-xs text-gray-500 mb-3">
+                                  Faturamento pontual — comissão, bônus, um extra combinado. Entra apenas no período
+                                  que contém a data e não se repete nos meses seguintes.
+                                </p>
+                                <div className="space-y-2">
+                                  {(client.extraRevenues || []).map(extra => (
+                                    <div key={extra.id} className="flex flex-wrap items-center gap-2">
+                                      <input
+                                        type="date"
+                                        className={`${INPUT_STYLE} w-36`}
+                                        value={extra.date}
+                                        onChange={e => updateExtra(realIndex, extra.id, 'date', e.target.value)}
+                                      />
+                                      <input
+                                        type="text"
+                                        placeholder="Do que se trata"
+                                        className={`${INPUT_STYLE} flex-1 min-w-[180px]`}
+                                        value={extra.label}
+                                        onChange={e => updateExtra(realIndex, extra.id, 'label', e.target.value)}
+                                      />
+                                      <input
+                                        type="number"
+                                        placeholder="0,00"
+                                        className={`${INPUT_STYLE} w-32`}
+                                        value={extra.amount}
+                                        onChange={e => updateExtra(realIndex, extra.id, 'amount', e.target.value)}
+                                      />
+                                      <label className="flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap" title="Marque quando o valor já chega líquido, sem matriz nem imposto a descontar.">
+                                        <input
+                                          type="checkbox"
+                                          checked={!!extra.liquido}
+                                          onChange={e => updateExtra(realIndex, extra.id, 'liquido', e.target.checked)}
+                                        />
+                                        já líquido
+                                      </label>
+                                      <select
+                                        className={`${INPUT_STYLE} w-28`}
+                                        value={extra.category || client.category}
+                                        onChange={e => updateExtra(realIndex, extra.id, 'category', e.target.value)}
+                                        title="Categoria em que este valor entra"
+                                      >
+                                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                      </select>
+                                      <button
+                                        onClick={() => removeExtra(realIndex, extra.id)}
+                                        className="text-xs text-gray-400 hover:text-neg-600 px-1"
+                                        title="Remover"
+                                      >✕</button>
+                                    </div>
+                                  ))}
+                                </div>
+                                <button
+                                  onClick={() => addExtra(realIndex)}
+                                  className="mt-3 text-xs px-2.5 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-white transition-colors"
+                                >
+                                  + Adicionar faturamento pontual
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </React.Fragment>
                     )})}
                 </tbody>
                 </table>

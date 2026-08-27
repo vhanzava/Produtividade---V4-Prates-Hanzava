@@ -280,7 +280,14 @@ export const calculateSummary = (
   employees: EmployeeConfig[], 
   clients: ClientConfig[],
   startDateStr: string,
-  endDateStr: string
+  endDateStr: string,
+  /**
+   * TODOS os apontamentos, não apenas os do filtro. Cliente de Saber reconhece
+   * o faturamento no primeiro mês em que houve trabalho; se esse mês fosse
+   * calculado sobre a janela filtrada, olhar só o mês seguinte faria dele "o
+   * primeiro" e a receita reapareceria lá — o oposto da regra.
+   */
+  allEntries: TimeEntry[] = entries,
 ): {
   clientSummaries: ClientSummary[];
   employeeSummaries: EmployeeSummary[];
@@ -354,6 +361,17 @@ export const calculateSummary = (
   // nome diferente do cadastro. O índice abaixo traz tudo para o nome canônico
   // antes de somar, para que horas e fee caiam no mesmo cliente.
   const nameIndex = buildClientNameIndex(clients);
+
+  // Primeiro mês em que cada cliente recebeu trabalho, calculado sobre a base
+  // completa. É o mês de faturamento dos contratos de Saber: escopo fechado,
+  // pago de uma vez, reconhecido quando a entrega começou de fato — e não na
+  // data do contrato, que pode ser semanas antes de alguém tocar no projeto.
+  const primeiroMesTrabalhado = new Map<string, string>();
+  allEntries.forEach(entry => {
+      const nome = resolveClientName(entry.workspace, nameIndex);
+      const atual = primeiroMesTrabalhado.get(nome);
+      if (!atual || entry.monthKey < atual) primeiroMesTrabalhado.set(nome, entry.monthKey);
+  });
   const clientStats = new Map<string, { hours: number; cost: number }>();
   const empStats = new Map<string, { hours: number; cost: number }>();
 
@@ -411,6 +429,11 @@ export const calculateSummary = (
     // uma vez só, no fim.
     let grossTotal = 0;
     let grossOneTime = 0;
+    // Extras pontuais entram já líquidos ou brutos conforme o lançamento, por
+    // isso são somados à parte e não passam pelo netRatio geral.
+    let extraNet = 0;
+    let extraGross = 0;
+    const extrasPorCategoria = new Map<ClientCategory, number>();
     let netRatio = 1;
     let category: ClientCategory = 'Executar';
     let implementationCategory: ClientCategory = 'Ter';
@@ -444,7 +467,17 @@ export const calculateSummary = (
                 ? 1
                 : Math.max(1, Math.round(config.implementationMonths ?? DEFAULT_IMPLEMENTATION_MONTHS));
             const contractStart = new Date(config.contractStartDate + 'T00:00:00');
-            const startMonthIndex = contractStart.getFullYear() * 12 + contractStart.getMonth();
+            let startMonthIndex = contractStart.getFullYear() * 12 + contractStart.getMonth();
+
+            // Saber: âncora é o primeiro mês com hora apontada. Sem horas em
+            // lugar nenhum, cai na data do contrato como aproximação.
+            if (implementationCategory === 'Saber') {
+                const mesTrabalho = primeiroMesTrabalhado.get(name);
+                if (mesTrabalho) {
+                    const [ty, tm] = mesTrabalho.split('-').map(Number);
+                    startMonthIndex = ty * 12 + (tm - 1);
+                }
+            }
             const perMonth = config.oneTimeFee / months;
 
             activeMonths.forEach(m => {
@@ -464,31 +497,47 @@ export const calculateSummary = (
             const monthlyFee = config.history[m] !== undefined ? config.history[m] : config.defaultFee;
             grossTotal += monthlyFee * getProRataRatio(m);
         });
+
+        // Faturamento pontual: vale só no período que contém a data. Não se
+        // repete, não se dilui, e some quando o filtro não alcança o dia.
+        (config.extraRevenues || []).forEach(extra => {
+            const quando = new Date(extra.date + 'T12:00:00');
+            if (Number.isNaN(quando.getTime()) || quando < start || quando > end) return;
+            const valor = Number(extra.amount) || 0;
+            if (valor === 0) return;
+            extraGross += valor;
+            const liquido = extra.liquido ? valor : valor * netRatio;
+            extraNet += liquido;
+            const cat = extra.category || config.category;
+            extrasPorCategoria.set(cat, (extrasPorCategoria.get(cat) || 0) + liquido);
+        });
     }
 
-    const totalFee = grossTotal * netRatio;
+    const totalFee = grossTotal * netRatio + extraNet;
     const realizedOneTimeFee = grossOneTime * netRatio;
 
     if (stat.hours > 0 || totalFee > 0 || config) {
-        const grossProfit = totalFee - stat.cost;
-        const margin = totalFee > 0 ? (grossProfit / totalFee) * 100 : 0;
+        const operatingMargin = totalFee - stat.cost;
+        const margin = totalFee > 0 ? (operatingMargin / totalFee) * 100 : 0;
         const isInadimplente = !!(config?.is_inadimplente);
 
         // Um cliente ocupa mais de uma categoria quando teve implementação
         // reconhecida no período: o recorrente numa, o setup na outra.
         const hasImplementation = realizedOneTimeFee > 0;
-        const categories: ClientCategory[] = hasImplementation && implementationCategory !== category
-            ? [category, implementationCategory]
-            : [category];
+        const categories: ClientCategory[] = [category];
+        if (hasImplementation && !categories.includes(implementationCategory)) categories.push(implementationCategory);
+        // Um extra pode pertencer a outra categoria — comissão de Saber num
+        // cliente de Executar, por exemplo — e precisa aparecer no filtro dela.
+        extrasPorCategoria.forEach((_, cat) => { if (!categories.includes(cat)) categories.push(cat); });
 
         clientSummaries.push({
             name,
             totalHours: stat.hours,
             operationalCost: stat.cost,
-            grossRevenue: grossTotal,
+            grossRevenue: grossTotal + extraGross,
             netRevenue: totalFee,
             implementationRevenue: realizedOneTimeFee,
-            grossProfit,
+            operatingMargin,
             margin,
             isActive,
             category,
@@ -506,7 +555,10 @@ export const calculateSummary = (
                 // categoria de operação do cliente; a implementação pertence à
                 // categoria do que foi entregue (Saber para Estruturação e
                 // Destrava Receita, Ter para setups e ferramental).
-                revenueByCategory[category] += totalFee - realizedOneTimeFee;
+                revenueByCategory[category] += totalFee - realizedOneTimeFee - extraNet;
+                // Extras podem ter categoria própria (uma comissão de Saber
+                // num cliente de Executar, por exemplo).
+                extrasPorCategoria.forEach((valor, cat) => { revenueByCategory[cat] += valor; });
                 if (hasImplementation) {
                     revenueByCategory[implementationCategory] += realizedOneTimeFee;
                 }
@@ -640,18 +692,18 @@ export const calculateSummary = (
       }
   });
 
-  const grossProfitGlobal = totalRevenueGlobal - totalCostGlobal;
-  const overallMargin = totalRevenueGlobal > 0 ? (grossProfitGlobal / totalRevenueGlobal) * 100 : 0;
+  const operatingMarginGlobal = totalRevenueGlobal - totalCostGlobal;
+  const overallMargin = totalRevenueGlobal > 0 ? (operatingMarginGlobal / totalRevenueGlobal) * 100 : 0;
   const globalCapacityRate = totalCapacityGlobal > 0 ? (totalHoursRealizedGlobal / totalCapacityGlobal) * 100 : 0;
 
   return {
-    clientSummaries: clientSummaries.sort((a, b) => b.grossProfit - a.grossProfit),
+    clientSummaries: clientSummaries.sort((a, b) => b.operatingMargin - a.operatingMargin),
     employeeSummaries: employeeSummaries.sort((a, b) => b.utilizationRate - a.utilizationRate),
     departmentSummaries: departmentSummaries.sort((a, b) => b.utilizationRate - a.utilizationRate),
     dashboard: {
       totalRevenue: totalRevenueGlobal,
       totalCost: totalCostGlobal,
-      grossProfit: grossProfitGlobal,
+      operatingMargin: operatingMarginGlobal,
       overallMargin,
       totalHours: totalHoursRealizedGlobal,
       totalCapacityHours: totalCapacityGlobal,

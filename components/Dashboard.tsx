@@ -1,9 +1,16 @@
 import React, { useState } from 'react';
 import { ClientSummary, EmployeeSummary, DashboardSummary, DepartmentSummary, ClientCategory } from '../types';
-import { DollarSign, Clock, TrendingUp, AlertTriangle, Briefcase, ArrowUpDown, ArrowUp, ArrowDown, PieChart as PieIcon, BarChart as BarChartIcon, Users, Activity, Filter } from 'lucide-react';
+import { DollarSign, Clock, TrendingUp, AlertTriangle, Briefcase, ArrowUpDown, ArrowUp, ArrowDown, PieChart as PieIcon, BarChart as BarChartIcon, Users, Activity, Filter, Eye, EyeOff, Lock } from 'lucide-react';
+import { formatPersonName, shortPersonName } from '../services/format';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie, ReferenceLine } from 'recharts';
 
 interface DashboardProps {
+  /**
+   * Custo por pessoa é dado sensível. Só quem tem esta permissão consegue
+   * revelar a coluna, e a revelação é local e efêmera: vale para esta sessão
+   * neste navegador, não fica salva nem afeta o que os outros veem.
+   */
+  canViewCost?: boolean;
   summary: {
     clientSummaries: ClientSummary[];
     employeeSummaries: EmployeeSummary[];
@@ -44,14 +51,17 @@ type ClientSortKey = keyof ClientSummary;
 type EmployeeSortKey = keyof EmployeeSummary;
 type TabKey = 'overview' | 'productivity' | 'profitability' | 'player';
 
-const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
+const Dashboard: React.FC<DashboardProps> = ({ summary, canViewCost = false }) => {
   const { dashboard, clientSummaries, employeeSummaries, departmentSummaries } = summary;
   const [activeSubTab, setActiveSubTab] = useState<TabKey>('overview');
   
   // States
-  const [clientSortConfig, setClientSortConfig] = useState<{ key: ClientSortKey; direction: 'asc' | 'desc' }>({ key: 'grossProfit', direction: 'asc' });
+  const [clientSortConfig, setClientSortConfig] = useState<{ key: ClientSortKey; direction: 'asc' | 'desc' }>({ key: 'operatingMargin', direction: 'asc' });
   const [employeeSortConfig, setEmployeeSortConfig] = useState<{ key: EmployeeSortKey; direction: 'asc' | 'desc' }>({ key: 'utilizationRate', direction: 'desc' });
   const [categoryFilter, setCategoryFilter] = useState<'All' | ClientCategory>('All');
+  // Deliberadamente NÃO persistido: revelar é um ato pontual, e a próxima
+  // abertura da tela volta a esconder.
+  const [custoVisivel, setCustoVisivel] = useState(false);
 
   // Formatters
   const fmt = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -109,13 +119,13 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
   });
 
   // Chart Data Prep
-  const sortedByProfit = [...activeClientSummaries].sort((a, b) => b.grossProfit - a.grossProfit);
+  const sortedByProfit = [...activeClientSummaries].sort((a, b) => b.operatingMargin - a.operatingMargin);
   let chartDataRaw = sortedByProfit;
   if (sortedByProfit.length > 20) chartDataRaw = [...sortedByProfit.slice(0, 10), ...sortedByProfit.slice(-5)];
   
   const clientChartData = chartDataRaw.map(c => ({
     name: c.name.length > 15 ? c.name.substring(0, 15) + '...' : c.name,
-    Lucro: parseFloat(c.grossProfit.toFixed(2)),
+    'Margem Op.': parseFloat(c.operatingMargin.toFixed(2)),
     Faturamento: c.netRevenue,
     Custo: parseFloat(c.operationalCost.toFixed(2))
   }));
@@ -143,7 +153,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
   }));
 
   const employeeChartData = activeEmployeeSummaries.map(e => ({
-      name: e.name.split(' ')[0], 
+      name: shortPersonName(e.name),
       Capacidade: e.capacityHours,
       Realizado: e.totalHours,
       Ocupacao: e.utilizationRate
@@ -197,11 +207,11 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
             <KPICard title="Faturamento" value={fmt(dashboard.totalRevenue)} sub="líquido de matriz e imposto" icon={DollarSign} />
             <KPICard title="Custo Operacional" value={fmt(dashboard.totalCost)} sub={`${fmtNum(dashboard.totalHours)} horas apontadas`} icon={Clock} />
             <KPICard
-              title="Lucro Bruto"
-              value={fmt(dashboard.grossProfit)}
+              title="Margem Operacional"
+              value={fmt(dashboard.operatingMargin)}
               sub={`${fmtPct(dashboard.overallMargin)} de margem`}
               icon={TrendingUp}
-              tone={dashboard.grossProfit >= 0 ? 'pos' : 'neg'}
+              tone={dashboard.operatingMargin >= 0 ? 'pos' : 'neg'}
             />
             <KPICard
               title="Menor Margem"
@@ -254,8 +264,8 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                   <div className="space-y-2 text-sm text-gray-600">
                     <div className="flex justify-between"><span>Faturamento</span><span className="font-medium text-gray-900 tnum">{fmt(catRevenue)}</span></div>
                     <div className="flex justify-between"><span>Custo</span><span className="font-medium text-gray-900 tnum">{fmt(catCost)}</span></div>
-                    <div className="flex justify-between"><span>Lucro</span><span className={`font-semibold tnum ${catProfit >= 0 ? 'text-pos-600' : 'text-neg-600'}`}>{fmt(catProfit)}</span></div>
-                    <div className="flex justify-between"><span>Margem</span><span className={`font-medium tnum ${catMargin >= 0 ? 'text-gray-900' : 'text-neg-600'}`}>{fmtPct(catMargin)}</span></div>
+                    <div className="flex justify-between"><span>Margem Op.</span><span className={`font-semibold tnum ${catProfit >= 0 ? 'text-pos-600' : 'text-neg-600'}`}>{fmt(catProfit)}</span></div>
+                    <div className="flex justify-between"><span>Margem %</span><span className={`font-medium tnum ${catMargin >= 0 ? 'text-gray-900' : 'text-neg-600'}`}>{fmtPct(catMargin)}</span></div>
                   </div>
                   {/* Barra de participação na receita total */}
                   <div className="mt-4">
@@ -443,8 +453,8 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                                 <Legend verticalAlign="top" wrapperStyle={{ paddingBottom: '20px' }} />
                                 <Bar dataKey="Fee" fill="#404040" />
                                 <Bar dataKey="Custo" fill="#b91c1c" />
-                                <Bar dataKey="Lucro">
-                                    {clientChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.Lucro >= 0 ? '#16a34a' : '#dc2626'} />)}
+                                <Bar dataKey="Margem Op.">
+                                    {clientChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry['Margem Op.'] >= 0 ? '#047857' : '#DC2626'} />)}
                                 </Bar>
                             </BarChart>
                         </ResponsiveContainer>
@@ -490,11 +500,11 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                       <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleClientSort('netRevenue')} title="O que entra de fato: contrato menos 20% de matriz e 6% de imposto. Em cliente de repasse, menos o repasse e só o imposto.">
                           <div className="flex items-center justify-end">Faturamento <ClientSortIcon columnKey="netRevenue" /></div>
                       </th>
-                      <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleClientSort('grossProfit')}>
-                          <div className="flex items-center justify-end">Lucro <ClientSortIcon columnKey="grossProfit" /></div>
+                      <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleClientSort('operatingMargin')}>
+                          <div className="flex items-center justify-end">Margem Op. <ClientSortIcon columnKey="operatingMargin" /></div>
                       </th>
                       <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleClientSort('margin')}>
-                          <div className="flex items-center justify-end">Margem <ClientSortIcon columnKey="margin" /></div>
+                          <div className="flex items-center justify-end">Margem % <ClientSortIcon columnKey="margin" /></div>
                       </th>
                     </tr>
                   </thead>
@@ -527,8 +537,8 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                         <td className="px-6 py-3.5 text-sm text-gray-500 text-right">{fmt(client.operationalCost)}</td>
                         <td className="px-6 py-3.5 text-sm text-gray-500 text-right">{fmt(client.grossRevenue)}</td>
                         <td className="px-6 py-3.5 text-sm text-gray-700 font-medium text-right">{fmt(client.netRevenue)}</td>
-                        <td className={`px-6 py-4 text-sm font-medium text-right ${client.grossProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {fmt(client.grossProfit)}
+                        <td className={`px-6 py-4 text-sm font-medium text-right ${client.operatingMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {fmt(client.operatingMargin)}
                         </td>
                         <td className="px-6 py-3.5 text-sm text-gray-500 text-right">
                           <span className={`px-2 rounded-full text-xs font-semibold ${client.margin >= 20 ? 'bg-green-100 text-green-800' : client.margin > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
@@ -582,8 +592,25 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                       <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleEmployeeSort('utilizationRate')}>
                           <div className="flex items-center justify-end">Ocupação <EmployeeSortIcon columnKey="utilizationRate" /></div>
                       </th>
-                      <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500 cursor-pointer" onClick={() => handleEmployeeSort('costGenerated')}>
-                          <div className="flex items-center justify-end">Custo <EmployeeSortIcon columnKey="costGenerated" /></div>
+                      <th className="px-6 py-3 text-right text-[13px] font-semibold text-gray-500">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {canViewCost ? (
+                              <button
+                                type="button"
+                                onClick={() => setCustoVisivel(v => !v)}
+                                className="flex items-center gap-1.5 hover:text-gray-700 transition-colors"
+                                title={custoVisivel ? 'Ocultar custo por pessoa' : 'Mostrar custo por pessoa (só para você, nesta sessão)'}
+                              >
+                                {custoVisivel ? <Eye size={13} /> : <EyeOff size={13} />}
+                                Custo
+                              </button>
+                            ) : (
+                              <span className="flex items-center gap-1.5" title="Custo por pessoa é restrito">
+                                <Lock size={12} /> Custo
+                              </span>
+                            )}
+                            {custoVisivel && <EmployeeSortIcon columnKey="costGenerated" />}
+                          </div>
                       </th>
                     </tr>
                   </thead>
@@ -594,7 +621,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                       <tr key={idx} className={`hover:bg-gray-50 ${empChurned ? 'opacity-75' : ''}`}>
                         <td className="px-6 py-3.5 text-sm font-medium text-gray-900">
                           <div className="flex flex-col gap-0.5">
-                            <span>{emp.name}</span>
+                            <span>{formatPersonName(emp.name)}</span>
                             {empChurned && emp.endDate && (
                               <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded w-fit">
                                 Saiu em {new Date(emp.endDate + 'T00:00:00').toLocaleDateString('pt-BR')}
@@ -624,7 +651,7 @@ const Dashboard: React.FC<DashboardProps> = ({ summary }) => {
                                {fmtPct(emp.utilizationRate)}
                            </span>
                         </td>
-                        <td className="px-6 py-3.5 text-sm text-gray-500 text-right">{fmt(emp.costGenerated)}</td>
+                        <td className={`px-6 py-3.5 text-sm text-right ${custoVisivel ? 'text-gray-700' : 'text-gray-300 select-none'}`}>{custoVisivel ? fmt(emp.costGenerated) : '••••••'}</td>
                       </tr>
                       );
                     })}
