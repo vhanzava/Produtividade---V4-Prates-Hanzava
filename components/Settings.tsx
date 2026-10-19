@@ -484,7 +484,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
             <table className="min-w-full divide-y divide-gray-200">
               <thead>
                 <tr>
-                  <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Nome</th>
+                  <th className="col-fixa px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Nome</th>
                   <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Departamento</th>
                   <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Verticais</th>
                   <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Início</th>
@@ -503,8 +503,8 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                   const churned = isChurned(emp);
                   if (churned && !showInactive) return null;
                   return (
-                  <tr key={idx} className={churned ? 'bg-gray-50 opacity-70' : ''}>
-                    <td className="px-6 py-3.5 whitespace-nowrap text-sm font-medium text-gray-900">
+                  <tr key={idx} className={churned ? 'linha-inativa bg-gray-50 opacity-70' : ''}>
+                    <td className="col-fixa px-6 py-3.5 whitespace-nowrap text-sm font-medium text-gray-900">
                       <div className="flex flex-col gap-1">
                         <span>{emp.name}</span>
                         {churned && emp.endDate && (
@@ -791,10 +791,10 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                 <table className="min-w-full divide-y divide-gray-200">
                 <thead>
                     <tr>
+                    <th className="col-fixa px-3 py-3 text-left text-[13px] font-semibold text-gray-500">Nome</th>
                     <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500 w-10">Contrato</th>
                     <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500">Início</th>
                     <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500">Status</th>
-                    <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500">Nome</th>
                     <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500">Categoria</th>
                     <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500">Account</th>
                     <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500">
@@ -825,7 +825,26 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                         const realIndex = localClients.findIndex(c => c.name === client.name);
                         return (
                         <React.Fragment key={realIndex}>
-                        <tr className={client.isActive ? '' : 'bg-gray-50 opacity-75'}>
+                        <tr className={client.isActive ? '' : 'linha-inativa bg-gray-50 opacity-75'}>
+                            <td className="col-fixa px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 min-w-[200px]">
+                                {client.name}
+                                {/* Categorias efetivas: a do recorrente mais a da implementação,
+                                    quando há setup. Um cliente raramente pertence a uma só. */}
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                    {getClientCategories(client).map(cat => (
+                                        <span
+                                            key={cat}
+                                            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
+                                                cat === 'Saber' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                                                cat === 'Ter' ? 'bg-teal-50 text-teal-800 border-teal-200' :
+                                                'bg-gray-100 text-gray-800 border-gray-300'
+                                            }`}
+                                        >
+                                            {cat}
+                                        </span>
+                                    ))}
+                                </div>
+                            </td>
                              <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                                 <button
                                     onClick={() => fileInputRefs.current[realIndex]?.click()}
@@ -864,25 +883,6 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     <option value="true">Ativo</option>
                                     <option value="false">Churned</option>
                                 </select>
-                            </td>
-                            <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 min-w-[200px]">
-                                {client.name}
-                                {/* Categorias efetivas: a do recorrente mais a da implementação,
-                                    quando há setup. Um cliente raramente pertence a uma só. */}
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                    {getClientCategories(client).map(cat => (
-                                        <span
-                                            key={cat}
-                                            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
-                                                cat === 'Saber' ? 'bg-amber-50 text-amber-800 border-amber-200' :
-                                                cat === 'Ter' ? 'bg-teal-50 text-teal-800 border-teal-200' :
-                                                'bg-gray-100 text-gray-800 border-gray-300'
-                                            }`}
-                                        >
-                                            {cat}
-                                        </span>
-                                    ))}
-                                </div>
                             </td>
                             <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                                 <select

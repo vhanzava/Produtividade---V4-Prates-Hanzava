@@ -70,6 +70,19 @@
         box-shadow: inset 0 -1px 0 #e5e7eb;
       }
 
+      /* Coluna de identificação fixa à esquerda, como numa planilha: em tabelas
+         largas o usuário rola para os campos do fim e perdia de vista de qual
+         cliente ou pessoa era aquela linha. */
+      .col-fixa {
+        position: sticky;
+        left: 0;
+        z-index: 5;
+        background-color: #fff;
+        box-shadow: 6px 0 8px -6px rgba(16,24,40,0.12);
+      }
+      th.col-fixa { z-index: 11; background-color: #fbfcfd; }
+      tr.linha-inativa .col-fixa { background-color: #f9fafb; }
+
       /* Setas dos campos numéricos ocupavam metade de um campo estreito e o
          valor ficava cortado ("1124"). Digitar é o uso real aqui. */
       input[type=number]::-webkit-inner-spin-button,
