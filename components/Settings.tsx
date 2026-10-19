@@ -66,6 +66,10 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
 
   // Churn flow
   const [showInactive, setShowInactive] = useState(false);
+  // Clientes churnados ficam fora da tabela por padrão: são consulta
+  // eventual, e misturados aos ativos dobravam o tamanho da lista que se edita
+  // todo mês.
+  const [showChurnedClients, setShowChurnedClients] = useState(false);
   const [churnTarget, setChurnTarget] = useState<number | null>(null); // index being churned
   const [churnDate, setChurnDate] = useState<string>(new Date().toISOString().slice(0, 10));
 
@@ -383,6 +387,8 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
       if (a.isActive === b.isActive) return a.name.localeCompare(b.name);
       return a.isActive ? -1 : 1;
   });
+  const totalChurnados = sortedClients.filter(c => !c.isActive).length;
+  const primeiroChurnado = sortedClients.findIndex(c => !c.isActive);
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-card overflow-hidden">
@@ -787,6 +793,22 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                 </button>
              </div>
 
+             <div className="flex items-center justify-between px-2">
+               <span className="text-xs text-gray-500 font-medium tnum">
+                 {sortedClients.length - totalChurnados} ativo(s)
+                 {totalChurnados > 0 && <> · <span className="text-gray-400">{totalChurnados} churnado(s)</span></>}
+               </span>
+               {totalChurnados > 0 && (
+                 <button
+                   onClick={() => setShowChurnedClients(v => !v)}
+                   className={`text-xs px-2 py-1 rounded border transition-colors ${showChurnedClients ? 'bg-gray-700 text-white border-gray-700' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                   aria-expanded={showChurnedClients}
+                 >
+                   {showChurnedClients ? 'Ocultar churnados' : `Mostrar churnados (${totalChurnados})`}
+                 </button>
+               )}
+             </div>
+
              <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                 <thead>
@@ -823,8 +845,16 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                 <tbody className="bg-white divide-y divide-gray-200">
                     {sortedClients.map((client, idx) => {
                         const realIndex = localClients.findIndex(c => c.name === client.name);
+                        if (!client.isActive && !showChurnedClients) return null;
                         return (
                         <React.Fragment key={realIndex}>
+                        {idx === primeiroChurnado && (
+                          <tr className="bg-gray-100">
+                            <td colSpan={13} className="col-fixa bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-600">
+                              Churnados — {totalChurnados} cliente(s) que não fazem mais parte da carteira
+                            </td>
+                          </tr>
+                        )}
                         <tr className={client.isActive ? '' : 'linha-inativa bg-gray-50 opacity-75'}>
                             <td className="col-fixa px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 min-w-[200px]">
                                 {client.name}
