@@ -1,4 +1,5 @@
 import { TimeEntry, EmployeeConfig, ClientConfig, ClientSummary, EmployeeSummary, DashboardSummary, DepartmentSummary, DepartmentType, ClientCategory, ImplementationType } from '../types';
+import { mergeEmployees, canonicalizeEntries } from './employeeMerge';
 
 /**
  * Prazo padrão de implementação, em meses, quando o cliente não tem
@@ -295,6 +296,13 @@ export const calculateSummary = (
   dashboard: DashboardSummary;
 } => {
   
+  // Funde identidades duplicadas da mesma pessoa (nome x e-mail) antes de
+  // qualquer conta. Feito aqui, na leitura, corrige todo período — presente e
+  // histórico — sem depender de o cadastro ter sido limpo.
+  const fusao = mergeEmployees(employees);
+  employees = fusao.employees;
+  entries = canonicalizeEntries(entries, fusao.canonicalByKey);
+
   const empMap = new Map(employees.map(e => [e.name, e]));
   const clientMap = new Map(clients.map(c => [c.name, c]));
 

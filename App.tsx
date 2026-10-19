@@ -11,6 +11,7 @@ import HealthDashboard from './components/HealthDashboard';
 import { LayoutDashboard, Settings as SettingsIcon, LogOut, RefreshCw, Cloud, CloudOff, Info, HeartPulse, BarChart2, Loader, ShieldAlert } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { buildSession, fetchAccess } from './services/auth';
+import { mergeEmployees, canonicalizeEntries } from './services/employeeMerge';
 
 // O cabeçalho é claro; campos escuros nele viravam dois retângulos pretos
 // disputando atenção com os botões de ação ao lado.
@@ -502,7 +503,12 @@ const App: React.FC = () => {
              });
          }
     });
-    const updatedEmps = [...employees, ...newEmps];
+    // Grava a base já fundida: identidades duplicadas da mesma pessoa (nome x
+    // e-mail) viram um colaborador só, e os apontamentos passam a apontar para
+    // o nome canônico. Sem isso cada sincronização recriaria a duplicata.
+    const fusaoEmp = mergeEmployees([...employees, ...newEmps]);
+    const updatedEmps = fusaoEmp.employees;
+    const entriesCanon = canonicalizeEntries(mergedEntries, fusaoEmp.canonicalByKey);
 
     // O cadastro automático precisa enxergar APELIDOS, não só nomes.
     //
@@ -532,12 +538,12 @@ const App: React.FC = () => {
     });
     const updatedClients = [...clients, ...newClientsList];
 
-    setEntries(mergedEntries);
+    setEntries(entriesCanon);
     setEmployees(updatedEmps);
     setClients(updatedClients);
 
     const added = { newEmps: newEmps.length, newClients: newClientsList.length };
-    saveToCloud(mergedEntries, updatedEmps, updatedClients, options?.buildMessage?.(added));
+    saveToCloud(entriesCanon, updatedEmps, updatedClients, options?.buildMessage?.(added));
 
     return added;
   };

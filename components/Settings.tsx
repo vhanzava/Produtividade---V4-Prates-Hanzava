@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { EmployeeConfig, ClientConfig, DepartmentType, ClientCategory, ClientCategory as Vertical } from '../types';
 import { Save, User, Briefcase, Plus, Archive, RefreshCw, Calendar, FileText, Loader, Upload, UserX } from 'lucide-react';
 import { extractContractData } from '../services/contractParser';
+import { mergeEmployees } from '../services/employeeMerge';
 import {
   DEFAULT_IMPLEMENTATION_MONTHS,
   DEFAULT_IMPLEMENTATION_TYPE,
@@ -57,6 +58,9 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
   const [selectedMonth, setSelectedMonth] = useState<string>('default');
 
   const [localEmps, setLocalEmps] = useState(employees);
+  // Identidades da mesma pessoa no eKyte (nome x e-mail) que ainda estão
+  // separadas no cadastro.
+  const duplicadosEmp = mergeEmployees(localEmps).merged.filter(m => m.from.includes('@') || localEmps.some(e => e.name === m.to));
   const [localClients, setLocalClients] = useState(clients);
   const [isSaved, setIsSaved] = useState(false);
 
@@ -429,6 +433,26 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
 
         {activeTab === 'employees' ? (
           <div className="overflow-x-auto">
+            {duplicadosEmp.length > 0 && (
+              <div className="mx-2 mb-4 flex items-start justify-between gap-4 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <div className="text-sm text-amber-900">
+                  <p className="font-semibold">{duplicadosEmp.length} cadastro(s) para unificar (mesma pessoa ou nome em formato de e-mail)</p>
+                  <p className="mt-1 text-amber-800 text-xs leading-relaxed">
+                    {duplicadosEmp.map(d => `${d.from} → ${d.to}`).join(' · ')}
+                  </p>
+                  <p className="mt-1 text-amber-800 text-xs">
+                    Já são tratados como uma pessoa só no painel. Fundir aqui limpa o cadastro de vez.
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setLocalEmps(mergeEmployees(localEmps).employees); setIsSaved(false); }}
+                  className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 font-medium"
+                >
+                  Fundir agora
+                </button>
+              </div>
+            )}
+
             {/* Filtro: ativos / todos */}
             <div className="flex items-center justify-between px-2 pb-3">
               <div className="flex items-center gap-2">
