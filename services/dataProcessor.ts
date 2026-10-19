@@ -1,5 +1,6 @@
 import { TimeEntry, EmployeeConfig, ClientConfig, ClientSummary, EmployeeSummary, DashboardSummary, DepartmentSummary, DepartmentType, ClientCategory, ImplementationType } from '../types';
 import { mergeEmployees, canonicalizeEntries } from './employeeMerge';
+import { getEmployeeMonthCost } from './employeeCost';
 
 /**
  * Prazo padrão de implementação, em meses, quando o cliente não tem
@@ -394,9 +395,8 @@ export const calculateSummary = (
 
     let hourlyRate = 0;
     if (empConfig) {
-        const monthConfig = empConfig.history[entry.monthKey];
-        const cost = monthConfig ? monthConfig.cost : empConfig.defaultCost;
-        const hours = monthConfig ? monthConfig.hours : empConfig.defaultHours;
+        // Reajustes "a partir de" e exceções pontuais: ver employeeCost.ts.
+        const { cost, hours } = getEmployeeMonthCost(empConfig, entry.monthKey);
         hourlyRate = hours > 0 ? cost / hours : 0;
     }
 

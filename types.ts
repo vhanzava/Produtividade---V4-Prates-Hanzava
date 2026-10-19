@@ -47,6 +47,12 @@ export interface EmployeeConfig {
   // substitui o "8h/dia útil" do cálculo automático para aquela vertical.
   // Ex: Vinicius → { Executar: 2, Saber: 5 } (2h/dia como coord, 5h/dia como consultor)
   verticalHours?: Partial<Record<ClientCategory, number>>;
+  /**
+   * Reajustes de custo com data de início. Cada um vale do mês `from` em
+   * diante, até o próximo reajuste. Preserva o passado: o custo antigo continua
+   * valendo nos meses anteriores. Ver services/employeeCost.ts.
+   */
+  costChanges?: { from: string /* YYYY-MM */; cost: number }[];
   history: Record<string, MonthlyConfigEmp>; // key: "YYYY-MM"
 }
 

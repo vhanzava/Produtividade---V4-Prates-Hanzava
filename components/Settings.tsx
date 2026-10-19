@@ -3,6 +3,7 @@ import { EmployeeConfig, ClientConfig, DepartmentType, ClientCategory, ClientCat
 import { Save, User, Briefcase, Plus, Archive, RefreshCw, Calendar, FileText, Loader, Upload, UserX } from 'lucide-react';
 import { extractContractData } from '../services/contractParser';
 import { mergeEmployees } from '../services/employeeMerge';
+import { getEmployeeMonthCost } from '../services/employeeCost';
 import {
   DEFAULT_IMPLEMENTATION_MONTHS,
   DEFAULT_IMPLEMENTATION_TYPE,
@@ -70,6 +71,32 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
   // eventual, e misturados aos ativos dobravam o tamanho da lista que se edita
   // todo mês.
   const [showChurnedClients, setShowChurnedClients] = useState(false);
+
+  // Reajustes de custo "a partir de" por colaborador.
+  const [reajustesAbertos, setReajustesAbertos] = useState<Record<number, boolean>>({});
+  const proximoMes = () => {
+    const d = new Date(); d.setMonth(d.getMonth() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+  const addReajuste = (idx: number) => {
+    const novos = [...localEmps];
+    const emp = novos[idx];
+    const de = proximoMes();
+    emp.costChanges = [...(emp.costChanges || []), { from: de, cost: getEmployeeMonthCost(emp, de).cost }];
+    setLocalEmps(novos); setIsSaved(false);
+  };
+  const updateReajuste = (idx: number, pos: number, campo: 'from' | 'cost', valor: string) => {
+    const novos = [...localEmps];
+    const lista = [...(novos[idx].costChanges || [])];
+    lista[pos] = { ...lista[pos], [campo]: campo === 'cost' ? (parseFloat(valor) || 0) : valor };
+    novos[idx].costChanges = lista;
+    setLocalEmps(novos); setIsSaved(false);
+  };
+  const removeReajuste = (idx: number, pos: number) => {
+    const novos = [...localEmps];
+    novos[idx].costChanges = (novos[idx].costChanges || []).filter((_, i) => i !== pos);
+    setLocalEmps(novos); setIsSaved(false);
+  };
   const [churnTarget, setChurnTarget] = useState<number | null>(null); // index being churned
   const [churnDate, setChurnDate] = useState<string>(new Date().toISOString().slice(0, 10));
 
@@ -231,7 +258,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
         } else {
             if (!emp.history) emp.history = {};
             if (!emp.history[selectedMonth]) {
-                emp.history[selectedMonth] = { cost: emp.defaultCost, hours: emp.defaultHours };
+                emp.history[selectedMonth] = getEmployeeMonthCost(emp, selectedMonth);
             }
             if (field === 'monthlyCost') emp.history[selectedMonth].cost = numValue;
             if (field === 'monthlyHours') emp.history[selectedMonth].hours = numValue;
@@ -374,8 +401,10 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
       if (selectedMonth === 'default') {
           return type === 'cost' ? emp.defaultCost : emp.defaultHours;
       }
-      const hist = emp.history && emp.history[selectedMonth];
-      return hist ? (type === 'cost' ? hist.cost : hist.hours) : (type === 'cost' ? emp.defaultCost : emp.defaultHours);
+      // Mês específico: mostra o custo que de fato vale naquele mês, já com
+      // reajustes aplicados — não o base, que pode estar desatualizado.
+      const efetivo = getEmployeeMonthCost(emp, selectedMonth);
+      return type === 'cost' ? efetivo.cost : efetivo.hours;
   };
 
   const getClientFee = (client: ClientConfig) => {
@@ -509,7 +538,8 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                   const churned = isChurned(emp);
                   if (churned && !showInactive) return null;
                   return (
-                  <tr key={idx} className={churned ? 'linha-inativa bg-gray-50 opacity-70' : ''}>
+                  <React.Fragment key={idx}>
+                  <tr className={churned ? 'linha-inativa bg-gray-50 opacity-70' : ''}>
                     <td className="col-fixa px-6 py-3.5 whitespace-nowrap text-sm font-medium text-gray-900">
                       <div className="flex flex-col gap-1">
                         <span>{emp.name}</span>
@@ -597,6 +627,14 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                         value={getEmpValue(emp, 'cost')}
                         onChange={(e) => handleEmpChange(idx, 'monthlyCost', e.target.value)}
                       />
+                      <button
+                        type="button"
+                        onClick={() => setReajustesAbertos(a => ({ ...a, [idx]: !a[idx] }))}
+                        className={`mt-1 text-[11px] ${(emp.costChanges?.length || 0) > 0 ? 'text-teal-700 font-medium' : 'text-gray-500'} hover:underline`}
+                        title="Mudança de custo a partir de um mês, preservando o valor anterior nos meses de antes"
+                      >
+                        {(emp.costChanges?.length || 0) > 0 ? `Reajustes (${emp.costChanges!.length})` : '+ Reajuste'}
+                      </button>
                     </td>
                     <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
                       8h/dia úteis
@@ -641,6 +679,37 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                       )}
                     </td>
                   </tr>
+                  {reajustesAbertos[idx] && (
+                    <tr className="bg-gray-50">
+                      <td colSpan={8} className="px-6 py-4">
+                        <div className="max-w-xl">
+                          <p className="text-xs text-gray-500 mb-3">
+                            Cada reajuste vale do mês indicado em diante, até o próximo. Os meses anteriores
+                            continuam com o custo de antes. Custo base (antes de qualquer reajuste):{' '}
+                            <strong className="tnum">{emp.defaultCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong>.
+                          </p>
+                          <div className="space-y-2">
+                            {[...(emp.costChanges || [])].map((c, pos) => (
+                              <div key={pos} className="flex items-center gap-2">
+                                <span className="text-xs text-gray-600 w-12">A partir de</span>
+                                <input type="month" className={`${INPUT_STYLE} w-40`} value={c.from}
+                                  onChange={e => updateReajuste(idx, pos, 'from', e.target.value)} />
+                                <span className="text-xs text-gray-600">custo mensal</span>
+                                <input type="number" className={`${INPUT_STYLE} w-32 text-right`} value={c.cost}
+                                  onChange={e => updateReajuste(idx, pos, 'cost', e.target.value)} />
+                                <button onClick={() => removeReajuste(idx, pos)} className="text-xs text-gray-400 hover:text-neg-600 px-1" title="Remover">✕</button>
+                              </div>
+                            ))}
+                          </div>
+                          <button onClick={() => addReajuste(idx)}
+                            className="mt-3 text-xs px-2.5 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-white transition-colors">
+                            + Adicionar reajuste
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                   );
                 })}
               </tbody>

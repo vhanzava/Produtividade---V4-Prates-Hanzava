@@ -87,6 +87,11 @@ export const mergeEmployees = (employees: EmployeeConfig[]): EmployeeMergeResult
       defaultCost: base.defaultCost > 0 ? base.defaultCost : Math.max(...grupo.map(e => e.defaultCost || 0)),
       startDate: inicios[0] || base.startDate,
       endDate: algumAtivo ? undefined : saidas[saidas.length - 1],
+      // Reajustes de todas as identidades; no mesmo mês, fica o da mais completa.
+      costChanges: Object.values(Object.fromEntries(
+        [...grupo].sort((a, b) => riqueza(a) - riqueza(b))
+          .flatMap(e => e.costChanges || []).map(c => [c.from, c])
+      )),
       // Histórico mensal: a identidade mais completa prevalece mês a mês.
       history: Object.assign({}, ...[...grupo].sort((a, b) => riqueza(a) - riqueza(b)).map(e => e.history || {})),
     });
