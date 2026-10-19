@@ -21,8 +21,8 @@ export const personKey = (bruto: string): string =>
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/['’`]/g, '')
     .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
+    // Sem espaços: o eKyte às vezes junta nome e sobrenome ("Cristianomachado").
+    .replace(/\s+/g, '');
 
 const isEmail = (nome: string) => nome.includes('@');
 

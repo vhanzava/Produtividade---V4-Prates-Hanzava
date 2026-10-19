@@ -74,6 +74,15 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
     return new Date(emp.endDate + 'T00:00:00') <= new Date();
   };
 
+  // Opções de Account: só quem está no time hoje, uma vez por pessoa, sem
+  // marcadores técnicos. Antes listava todo colaborador já cadastrado —
+  // desligados, duplicatas (Cristianomachado / Cristiano Machado) e o
+  // fallback "Sem executor" da sincronização.
+  const accountOptions = mergeEmployees(localEmps).employees
+    .filter(e => !isChurned(e) && e.name !== 'Sem executor')
+    .map(e => e.name)
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
   const handleChurnConfirm = (idx: number) => {
     const newEmps = [...localEmps];
     newEmps[idx] = { ...newEmps[idx], endDate: churnDate };
@@ -782,31 +791,31 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                 <table className="min-w-full divide-y divide-gray-200">
                 <thead>
                     <tr>
-                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500 w-10">Contrato</th>
-                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Início</th>
-                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Status</th>
-                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Nome</th>
-                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Categoria</th>
-                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">Account</th>
-                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">
+                    <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500 w-10">Contrato</th>
+                    <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500">Início</th>
+                    <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500">Status</th>
+                    <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500">Nome</th>
+                    <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500">Categoria</th>
+                    <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500">Account</th>
+                    <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500">
                         Fee Recorrente {selectedMonth !== 'default' && '(Mês)'}
                     </th>
-                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500" title="Percentual do valor de contrato que fica com esta unidade. Contrato originado pela matriz ou por outra unidade repassa 30%. Deixe 100 para contrato próprio.">
+                    <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500" title="Percentual do valor de contrato que fica com esta unidade. Contrato originado pela matriz ou por outra unidade repassa 30%. Deixe 100 para contrato próprio.">
                         Repasse %
                     </th>
-                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500" title="O que foi implementado no contrato. Estruturação e Destrava Receita contam como Saber; setups, implementações e ferramental (site, CRM, landing page) contam como Ter.">
+                    <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500" title="O que foi implementado no contrato. Estruturação e Destrava Receita contam como Saber; setups, implementações e ferramental (site, CRM, landing page) contam como Ter.">
                         Tipo de impl.
                     </th>
-                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500" title="Em quantos meses a implementação é entregue. O valor de setup é reconhecido diluído nessa janela, a partir da data de início do contrato.">
+                    <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500" title="Em quantos meses a implementação é entregue. O valor de setup é reconhecido diluído nessa janela, a partir da data de início do contrato.">
                         Meses impl.
                     </th>
-                    <th className="px-6 py-3 text-left text-[13px] font-semibold text-gray-500">
+                    <th className="px-3 py-3 text-left text-[13px] font-semibold text-gray-500">
                         Setup (One-Time)
                     </th>
-                    <th className="px-6 py-3 text-center text-[13px] font-semibold text-gray-500">
+                    <th className="px-3 py-3 text-center text-[13px] font-semibold text-gray-500">
                         Inadimplente
                     </th>
-                    <th className="px-6 py-3 text-center text-[13px] font-semibold text-gray-500" title="Comissões, bônus e outros faturamentos pontuais deste cliente">
+                    <th className="px-3 py-3 text-center text-[13px] font-semibold text-gray-500" title="Comissões, bônus e outros faturamentos pontuais deste cliente">
                         Extras
                     </th>
                     </tr>
@@ -817,7 +826,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                         return (
                         <React.Fragment key={realIndex}>
                         <tr className={client.isActive ? '' : 'bg-gray-50 opacity-75'}>
-                             <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
+                             <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                                 <button
                                     onClick={() => fileInputRefs.current[realIndex]?.click()}
                                     className="text-red-600 hover:text-red-800 transition-colors p-1 rounded hover:bg-red-50"
@@ -838,15 +847,15 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     onChange={(e) => handleContractUpload(e, realIndex)}
                                 />
                             </td>
-                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                                 <input
                                     type="date"
-                                    className={INPUT_STYLE}
+                                    className={`${INPUT_STYLE.replace('w-full', '')} w-36`}
                                     value={client.contractStartDate || ''}
                                     onChange={(e) => handleClientChange(realIndex, 'contractStartDate', e.target.value)}
                                 />
                             </td>
-                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                                 <select
                                     value={client.isActive ? 'true' : 'false'}
                                     onChange={(e) => handleClientChange(realIndex, 'isActive', e.target.value === 'true')}
@@ -856,7 +865,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     <option value="false">Churned</option>
                                 </select>
                             </td>
-                            <td className="px-6 py-3.5 whitespace-nowrap text-sm font-medium text-gray-900">
+                            <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 min-w-[200px]">
                                 {client.name}
                                 {/* Categorias efetivas: a do recorrente mais a da implementação,
                                     quando há setup. Um cliente raramente pertence a uma só. */}
@@ -875,9 +884,9 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     ))}
                                 </div>
                             </td>
-                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                                 <select
-                                    className={INPUT_STYLE}
+                                    className={`${INPUT_STYLE.replace('w-full', '')} w-28`}
                                     value={client.category || 'Executar'}
                                     onChange={(e) => handleClientChange(realIndex, 'category', e.target.value)}
                                     title="Categoria do fee recorrente. A implementação é classificada separadamente em 'Tipo de impl.'."
@@ -885,41 +894,46 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                             </td>
-                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                                 <select 
-                                    className={INPUT_STYLE}
+                                    className={`${INPUT_STYLE.replace('w-full', '')} w-44`}
                                     value={client.accountManager || ''}
                                     onChange={(e) => handleClientChange(realIndex, 'accountManager', e.target.value)}
                                 >
                                     <option value="">Selecione...</option>
-                                    {localEmps.map(emp => (
-                                        <option key={emp.name} value={emp.name}>{emp.name}</option>
+                                    {accountOptions.map(nome => (
+                                        <option key={nome} value={nome}>{nome}</option>
                                     ))}
+                                    {/* Quem já saiu do time não aparece para nova escolha, mas o
+                                        valor gravado continua visível em vez de sumir sem aviso. */}
+                                    {client.accountManager && !accountOptions.includes(client.accountManager) && (
+                                        <option value={client.accountManager}>{client.accountManager} (fora do time)</option>
+                                    )}
                                 </select>
                             </td>
-                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                                 <input
                                     type="number"
-                                    className={INPUT_STYLE}
+                                    className={`${INPUT_STYLE.replace('w-full', '')} w-32 text-right`}
                                     value={getClientFee(client)}
                                     onChange={(e) => handleClientChange(realIndex, 'monthlyFee', e.target.value)}
                                 />
                             </td>
-                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                                 <input
                                     type="number"
                                     min={0}
                                     max={100}
                                     step={1}
-                                    className={INPUT_STYLE}
+                                    className={`${INPUT_STYLE.replace('w-full', '')} w-20 text-right`}
                                     value={client.repassePercent ?? 100}
                                     onChange={(e) => handleClientChange(realIndex, 'repassePercent', e.target.value)}
                                     title="Fee e setup guardam o valor CHEIO do contrato; a receita reconhecida é esse valor vezes este percentual."
                                 />
                             </td>
-                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                                 <select
-                                    className={INPUT_STYLE}
+                                    className={`${INPUT_STYLE.replace('w-full', '')} w-56`}
                                     value={client.implementationType || DEFAULT_IMPLEMENTATION_TYPE}
                                     onChange={(e) => handleClientChange(realIndex, 'implementationType', e.target.value)}
                                     disabled={!client.oneTimeFee}
@@ -932,27 +946,27 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     ))}
                                 </select>
                             </td>
-                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                                 <input
                                     type="number"
                                     min={1}
                                     step={1}
-                                    className={INPUT_STYLE}
+                                    className={`${INPUT_STYLE.replace('w-full', '')} w-16 text-right`}
                                     value={client.implementationMonths ?? DEFAULT_IMPLEMENTATION_MONTHS}
                                     onChange={(e) => handleClientChange(realIndex, 'implementationMonths', e.target.value)}
                                     title="Use 1 para reconhecer o setup integralmente no mês de início do contrato."
                                 />
                             </td>
-                            <td className="px-6 py-3.5 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                                 <input
                                     type="number"
-                                    className={INPUT_STYLE}
+                                    className={`${INPUT_STYLE.replace('w-full', '')} w-32 text-right`}
                                     value={client.oneTimeFee || 0}
                                     onChange={(e) => handleClientChange(realIndex, 'oneTimeFee', e.target.value)}
                                     placeholder="0.00"
                                 />
                             </td>
-                            <td className="px-6 py-3.5 whitespace-nowrap text-center">
+                            <td className="px-3 py-3 whitespace-nowrap text-center">
                                 {/* Receita excluída do lucro real quando marcado */}
                                 <button
                                     onClick={() => handleClientChange(realIndex, 'is_inadimplente', !client.is_inadimplente)}
@@ -966,7 +980,7 @@ const Settings: React.FC<SettingsProps> = ({ employees, clients, onUpdateEmploye
                                     {client.is_inadimplente ? 'Inadimplente' : 'Adimplente'}
                                 </button>
                             </td>
-                            <td className="px-6 py-3.5 whitespace-nowrap text-center">
+                            <td className="px-3 py-3 whitespace-nowrap text-center">
                                 <button
                                     onClick={() => setExtrasAbertos(a => ({ ...a, [realIndex]: !a[realIndex] }))
                                     }

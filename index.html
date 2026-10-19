@@ -70,6 +70,12 @@
         box-shadow: inset 0 -1px 0 #e5e7eb;
       }
 
+      /* Setas dos campos numéricos ocupavam metade de um campo estreito e o
+         valor ficava cortado ("1124"). Digitar é o uso real aqui. */
+      input[type=number]::-webkit-inner-spin-button,
+      input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+      input[type=number] { -moz-appearance: textfield; }
+
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
       }
